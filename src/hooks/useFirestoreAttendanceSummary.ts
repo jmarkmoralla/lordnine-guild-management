@@ -30,12 +30,26 @@ export interface SummaryEditableFields {
   guildvsguild: number;
 }
 
+const ATTENDANCE_POINTS: Readonly<Record<keyof SummaryEditableFields, number>> = {
+  kransia: 10,
+  fieldBoss: 1,
+  guildBoss: 2,
+  guildvsguild: 1,
+};
+
 const getSummaryFieldByAttendanceType = (attendanceType: string): keyof SummaryEditableFields => {
   if (attendanceType === 'Field Boss') return 'fieldBoss';
   if (attendanceType === 'Guild Boss') return 'guildBoss';
   if (attendanceType === 'Kransia') return 'kransia';
   return 'guildvsguild';
 };
+
+const computeTotalPoints = (values: SummaryEditableFields) => (
+  Number(values.kransia || 0)
+  + Number(values.fieldBoss || 0)
+  + Number(values.guildBoss || 0)
+  + Number(values.guildvsguild || 0)
+);
 
 const sanitizeSummaryDocId = (name: string) =>
   `${name.trim().toLowerCase().replace(/\s+/g, '-')}_summary`;
@@ -100,8 +114,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       return;
     }
 
-    const totalAttendance =
-      normalizedValues.kransia + normalizedValues.fieldBoss + normalizedValues.guildBoss + normalizedValues.guildvsguild;
+    const totalAttendance = computeTotalPoints(normalizedValues);
 
     await updateDoc(summaryRef, {
       kransia: normalizedValues.kransia,
@@ -131,8 +144,8 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
           guildvsguild: existing.guildvsguild,
         };
 
-        nextValues[targetField] += 1;
-        const nextTotalAttendance = nextValues.kransia + nextValues.fieldBoss + nextValues.guildBoss + nextValues.guildvsguild;
+        nextValues[targetField] += ATTENDANCE_POINTS[targetField];
+        const nextTotalAttendance = computeTotalPoints(nextValues);
 
         batch.set(
           doc(db, 'guildAttendanceSummary', existing.id),
@@ -154,7 +167,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         guildBoss: 0,
         guildvsguild: 0,
       };
-      initialValues[targetField] = 1;
+      initialValues[targetField] = ATTENDANCE_POINTS[targetField];
 
       batch.set(
         doc(db, 'guildAttendanceSummary', sanitizeSummaryDocId(memberName)),
@@ -164,7 +177,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
           fieldBoss: initialValues.fieldBoss,
           guildBoss: initialValues.guildBoss,
           guildvsguild: initialValues.guildvsguild,
-          totalAttendance: 1,
+          totalAttendance: computeTotalPoints(initialValues),
           totalPercentage: 0,
           totalShareUSDT: 0,
         },
@@ -195,11 +208,10 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     attendanceSnapshot.docs.forEach((attendanceDoc) => {
       const data = attendanceDoc.data() as { attendanceType?: string };
       const targetField = getSummaryFieldByAttendanceType(data.attendanceType || '');
-      nextValues[targetField] += 1;
+      nextValues[targetField] += ATTENDANCE_POINTS[targetField];
     });
 
-    const totalAttendance =
-      nextValues.kransia + nextValues.fieldBoss + nextValues.guildBoss + nextValues.guildvsguild;
+    const totalAttendance = computeTotalPoints(nextValues);
 
     const existing = summaryRows.find((row) => row.name.trim().toLowerCase() === normalizedName);
     const summaryDocId = existing?.id || sanitizeSummaryDocId(memberName);

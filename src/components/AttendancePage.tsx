@@ -763,7 +763,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
-                <th>Total Attendance</th>
+                <th>Total Points</th>
                 <th>Percentage</th>
                 <th>USDT Share</th>
                 <th className="summary-action-col">View</th>
@@ -805,7 +805,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             {!loading && summaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={5} className="summary-footer-label">Total Attendance (as of {currentDateLabel})</td>
+                  <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
                   <td></td>
                   <td></td>
@@ -828,7 +828,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
-                <th>Total Attendance</th>
+                <th>Total Points</th>
                 <th>Percentage</th>
                 <th>USDT Share</th>
                 <th className="summary-action-col">View</th>
@@ -870,7 +870,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             {!loading && summaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={5} className="summary-footer-label">Total Attendance (as of {currentDateLabel})</td>
+                  <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
                   <td></td>
                   <td></td>
