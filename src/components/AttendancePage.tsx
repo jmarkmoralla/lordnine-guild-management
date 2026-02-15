@@ -35,6 +35,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isClearingAll, setIsClearingAll] = useState(false);
   const [isSavingAttendanceData, setIsSavingAttendanceData] = useState(false);
   const [isSyncingAttendanceSummary, setIsSyncingAttendanceSummary] = useState(false);
+  const [createAttendanceError, setCreateAttendanceError] = useState<string | null>(null);
   const [draftAttendanceByMemberId, setDraftAttendanceByMemberId] = useState<Record<string, AttendanceStatus | 'unmarked'>>({});
   const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
   const [editingMetricValue, setEditingMetricValue] = useState('');
@@ -146,6 +147,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     _memberName: string,
     checked: boolean
   ) => {
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
+
     setDraftAttendanceByMemberId((current) => ({
       ...current,
       [memberId]: checked ? 'present' : 'unmarked',
@@ -154,6 +159,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
   const clearAllAttendance = async () => {
     if (!canManage) return;
+
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
 
     setIsClearingAll(true);
     setDraftAttendanceByMemberId((current) => {
@@ -266,7 +275,21 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const saveAttendanceFromModal = async () => {
     if (!canManage) return;
 
+    const presentMemberNames = membersWithAttendance
+      .filter((member) => {
+        if (!member.id) return false;
+        return draftAttendanceByMemberId[member.id] === 'present';
+      })
+      .map((member) => member.name)
+      .filter(Boolean);
+
+    if (presentMemberNames.length === 0) {
+      setCreateAttendanceError('Select atleast 1 member before creating attendance.');
+      return;
+    }
+
     try {
+      setCreateAttendanceError(null);
       setIsSavingAttendanceData(true);
       setIsSyncingAttendanceSummary(true);
 
@@ -285,19 +308,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         })
       );
 
-      const presentMemberNames = membersWithAttendance
-        .filter((member) => {
-          if (!member.id) return false;
-          return draftAttendanceByMemberId[member.id] === 'present';
-        })
-        .map((member) => member.name)
-        .filter(Boolean);
-
       if (presentMemberNames.length > 0) {
         await syncPresentMembersToSummary(attendanceType, presentMemberNames);
       }
 
       setIsCreateAttendanceOpen(false);
+      setCreateAttendanceError(null);
     } catch (error) {
       console.error('Failed to sync attendance summary:', error);
     } finally {
@@ -726,7 +742,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             <button className="reset-attendance-btn" onClick={openResetAttendanceConfirm}>
               Reset Attendance
             </button>
-            <button className="create-attendance-btn" onClick={() => setIsCreateAttendanceOpen(true)}>
+            <button
+              className="create-attendance-btn"
+              onClick={() => {
+                setCreateAttendanceError(null);
+                setIsCreateAttendanceOpen(true);
+              }}
+            >
               <Plus size={16} strokeWidth={1.8} />
               Create Attendance
             </button>
@@ -929,13 +951,22 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       )}
 
       {canManage && isCreateAttendanceOpen && (
-        <div className="attendance-modal-overlay" onClick={() => setIsCreateAttendanceOpen(false)}>
+        <div
+          className="attendance-modal-overlay"
+          onClick={() => {
+            setIsCreateAttendanceOpen(false);
+            setCreateAttendanceError(null);
+          }}
+        >
           <div className="attendance-modal-content" onClick={(event) => event.stopPropagation()}>
             <div className="attendance-modal-header">
               <h3>Create Attendance</h3>
               <button
                 className="attendance-modal-close"
-                onClick={() => setIsCreateAttendanceOpen(false)}
+                onClick={() => {
+                  setIsCreateAttendanceOpen(false);
+                  setCreateAttendanceError(null);
+                }}
                 aria-label="Close"
               >
                 ×
@@ -1000,6 +1031,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               </div>
 
               <div className="attendance-modal-footer-right">
+                {createAttendanceError && (
+                  <p className="attendance-create-error">{createAttendanceError}</p>
+                )}
                 <button
                   className="action-btn attendance-save-btn"
                   onClick={saveAttendanceFromModal}

@@ -528,6 +528,13 @@
   margin-left: auto;
 }
 
+.attendance-create-error {
+  margin: 0 0.7rem 0 0;
+  color: #ffb8b0;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .action-btn.attendance-save-btn {
   min-width: 164px;
   padding: 0.55rem 1rem 0.62rem 1.08rem;

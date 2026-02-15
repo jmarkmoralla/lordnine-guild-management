@@ -201,7 +201,83 @@
   margin-bottom: 0;
 }
 
+.boss-modal {
+  max-width: 610px;
+  border-radius: 14px;
+}
+
+.boss-modal .modal-header {
+  padding: 1.45rem 1.3rem;
+}
+
+.boss-modal .modal-header h3 {
+  font-size: 1.12rem;
+  letter-spacing: -0.2px;
+}
+
+.boss-modal .modal-body {
+  padding: 1.35rem 1.3rem;
+}
+
+.boss-modal .modal-footer {
+  padding: 1.1rem 1.3rem;
+  gap: 0.75rem;
+}
+
+.boss-modal .form-grid {
+  gap: 0.95rem;
+}
+
+.boss-modal-error {
+  margin: 0 0 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 7px;
+  border: 1px solid rgba(231, 76, 60, 0.32);
+  background: rgba(231, 76, 60, 0.12);
+  color: #ffb8b0;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.boss-modal .form-group label {
+  font-size: 0.76rem;
+  margin-bottom: 0.45rem;
+  letter-spacing: 0.32px;
+}
+
+.boss-modal .form-group input,
+.boss-modal .form-group select {
+  padding: 0.66rem 0.8rem;
+  border-radius: 7px;
+  font-size: 0.88rem;
+}
+
+.boss-modal .btn-primary,
+.boss-modal .btn-secondary {
+  padding: 0.62rem 1.1rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  letter-spacing: 0.22px;
+}
+
+.boss-modal .image-preview {
+  margin-top: 0.55rem;
+  max-width: 185px;
+  border-radius: 10px;
+}
+
 @media (max-width: 900px) {
+  .boss-modal {
+    width: 92%;
+  }
+
+  .boss-modal .modal-header,
+  .boss-modal .modal-body,
+  .boss-modal .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
   }

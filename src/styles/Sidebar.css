@@ -38,9 +38,9 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  background: rgba(255, 255, 255, 0.12);
+  background: transparent;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: none;
   cursor: pointer;
   transition: all 0.3s ease;
   flex-shrink: 0;
@@ -51,10 +51,17 @@
   height: 20px;
 }
 
+.guild-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: none;
+  image-rendering: auto;
+}
+
 .guild-logo:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05);
+  transform: none;
 }
 
 .guild-info-section {
@@ -249,6 +256,16 @@
 
 .logout-btn-sidebar {
   font-size: 1.1rem;
+}
+
+.sidebar-copyright {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.68rem;
+  letter-spacing: 0.02rem;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
 }
 
 /* Scrollbar for Sidebar */

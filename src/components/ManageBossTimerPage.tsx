@@ -290,6 +290,32 @@ const withDefaultSpawnType = (boss: BossInfo): BossInfo => ({
   scheduledEndTime: boss.scheduledEndTime || '',
 });
 
+const validateBossForm = (boss: BossInfo): string => {
+  if (!boss.name.trim()) return 'Boss name is required.';
+  if (!boss.bossType) return 'Boss type is required.';
+  if (!boss.level || boss.level < 1) return 'Level is required and must be at least 1.';
+  if (!boss.spawnType) return 'Spawn type is required.';
+
+  if (boss.spawnType === 'fixed') {
+    const spawnHours = Number(boss.spawnTime);
+    if (!boss.spawnTime || Number.isNaN(spawnHours) || spawnHours < 0 || spawnHours > 23) {
+      return 'Spawn time is required and must be between 0 and 23 hours.';
+    }
+  } else if (boss.bossType === 'Destroyer') {
+    if (!boss.scheduledStartTime) return 'Spawn Time 1 is required.';
+    if (!boss.scheduledEndTime) return 'Spawn Time 2 is required.';
+  } else {
+    if (!boss.scheduledStartDay || !boss.scheduledStartTime) return 'Spawn Time 1 day and time are required.';
+    if (!boss.scheduledEndDay || !boss.scheduledEndTime) return 'Spawn Time 2 day and time are required.';
+  }
+
+  if (!boss.bossImage.trim()) return 'Boss image is required.';
+  if (!boss.status) return 'Status is required.';
+  if (boss.status === 'dead' && !boss.killedTime.trim()) return 'Killed time is required when status is dead.';
+
+  return '';
+};
+
 const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) => {
   const { bosses, loading, error, addBoss, updateBoss, deleteBoss } = useFirestoreBossInfo();
   const [searchQuery, setSearchQuery] = useState('');
@@ -302,6 +328,8 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newBoss, setNewBoss] = useState<BossInfo>({ ...defaultBoss });
+  const [addFormError, setAddFormError] = useState('');
+  const [editFormError, setEditFormError] = useState('');
   const [statusTick, setStatusTick] = useState(0);
   const bossesRef = useRef<BossInfo[]>([]);
   const isPromotingRef = useRef(false);
@@ -393,7 +421,14 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   );
 
   const handleAddBoss = async () => {
+    const validationError = validateBossForm(newBoss);
+    if (validationError) {
+      setAddFormError(validationError);
+      return;
+    }
+
     try {
+      setAddFormError('');
       setSaving(true);
       const payload = normalizeBossPayload(newBoss);
       await addBoss(payload);
@@ -408,7 +443,15 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
 
   const handleSaveBoss = async (boss: BossInfo) => {
     if (!boss.id) return;
+
+    const validationError = validateBossForm(boss);
+    if (validationError) {
+      setEditFormError(validationError);
+      return;
+    }
+
     try {
+      setEditFormError('');
       setSaving(true);
       const updates = normalizeBossPayload(boss);
       delete updates.id;
@@ -627,14 +670,22 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
 
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-content boss-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <h3>Add Boss</h3>
-              <button className="modal-close" onClick={() => setShowAddModal(false)} aria-label="Close">
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddFormError('');
+                }}
+                aria-label="Close"
+              >
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
             <div className="modal-body">
+              {addFormError && <p className="boss-modal-error">{addFormError}</p>}
               <div className="form-grid">
                 <div className="form-group">
                   <label>Name</label>
@@ -849,7 +900,14 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowAddModal(false)} disabled={saving}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddFormError('');
+                }}
+                disabled={saving}
+              >
                 Cancel
               </button>
               <button className="btn-primary" onClick={handleAddBoss} disabled={saving}>
@@ -862,14 +920,22 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
 
       {editingBoss && (
         <div className="modal-overlay" onClick={() => setEditingBoss(null)}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-content boss-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <h3>Edit Boss</h3>
-              <button className="modal-close" onClick={() => setEditingBoss(null)} aria-label="Close">
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setEditingBoss(null);
+                  setEditFormError('');
+                }}
+                aria-label="Close"
+              >
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
             <div className="modal-body">
+              {editFormError && <p className="boss-modal-error">{editFormError}</p>}
               <div className="form-grid">
                 <div className="form-group">
                   <label>Name</label>
@@ -1084,7 +1150,14 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setEditingBoss(null)} disabled={saving}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setEditingBoss(null);
+                  setEditFormError('');
+                }}
+                disabled={saving}
+              >
                 Cancel
               </button>
               <button className="btn-primary" onClick={() => handleSaveBoss(editingBoss)} disabled={saving}>

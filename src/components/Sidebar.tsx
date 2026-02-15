@@ -6,7 +6,6 @@ import {
   LogIn,
   LogOut,
   Moon,
-  Shield,
   Sun,
   Trophy,
   User,
@@ -31,8 +30,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
     { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} strokeWidth={1.75} /> },
   ];
 
-  const guildLogo = <Shield size={20} strokeWidth={1.75} />; // Default logo - can be updated by admin
-
   const adminMenuItems = userType === 'admin'
     ? [
         { id: 'manage-boss-timer', label: 'Manage Boss Timer', icon: <Clock size={18} strokeWidth={1.75} /> },
@@ -46,7 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
       <div className="sidebar-header">
         <div className="guild-header">
           <div className="guild-logo" title="Guild Logo - Admin can update">
-            {guildLogo}
+            <img src="/assets/images/lordnine_logo.png" alt="Lordnine Logo" className="guild-logo-image" />
           </div>
           <div className="guild-info-section">
             <h1 className="guild-name">Secreta</h1>
@@ -122,6 +119,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
               <LogIn size={16} strokeWidth={1.8} />
             </button>
           )}
+        </div>
+        <div className="sidebar-copyright" aria-label="Copyright footer">
+          © 2026 メKraaam. All rights reserved.
         </div>
       </div>
     </aside>
