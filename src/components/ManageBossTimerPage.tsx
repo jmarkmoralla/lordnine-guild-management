@@ -298,8 +298,8 @@ const validateBossForm = (boss: BossInfo): string => {
 
   if (boss.spawnType === 'fixed') {
     const spawnHours = Number(boss.spawnTime);
-    if (!boss.spawnTime || Number.isNaN(spawnHours) || spawnHours < 0 || spawnHours > 23) {
-      return 'Spawn time is required and must be between 0 and 23 hours.';
+    if (!boss.spawnTime.trim() || Number.isNaN(spawnHours)) {
+      return 'Spawn time is required and must be a valid number.';
     }
   } else if (boss.bossType === 'Destroyer') {
     if (!boss.scheduledStartTime) return 'Spawn Time 1 is required.';
