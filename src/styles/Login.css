@@ -1,0 +1,422 @@
+/* Login Page */
+.login-container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2f2f2f; /* dark gray background */
+  padding: 1rem;
+}
+
+.login-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(2,6,23,0.6);
+  width: 100%;
+  max-width: 540px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.03);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color: var(--text-primary);
+}
+
+.login-header {
+  background: linear-gradient(90deg, rgba(34,40,49,1) 0%, rgba(26,32,40,1) 100%);
+  color: #f8fafc;
+  padding: 1.25rem 1.5rem;
+  text-align: left;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.login-header .brand {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 6px 20px rgba(15,23,42,0.45);
+}
+
+.login-header .titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+  letter-spacing: 0.6px;
+  color: var(--text-accent, #60a5fa);
+}
+
+.login-subtitle {
+  font-size: 0.9rem;
+  opacity: 0.95;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.login-content {
+  padding: 2rem 1.5rem;
+}
+
+.login-section {
+  margin-bottom: 1.5rem;
+}
+
+.login-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  text-transform: none;
+}
+
+.section-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 0.9rem 0.85rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  text-transform: none;
+  letter-spacing: 0.25px;
+}
+
+.guest-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.guest-btn:hover {
+  background-color: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.admin-btn {
+  background: linear-gradient(90deg, #2563eb, #06b6d4);
+  color: white;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.18);
+}
+
+.admin-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(37,99,235,0.18);
+}
+
+.admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-divider {
+  text-align: center;
+  margin: 2rem 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+  position: relative;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 35%;
+  height: 1px;
+  background-color: var(--border-color);
+}
+
+.login-divider::before {
+  left: 0;
+}
+
+.login-divider::after {
+  right: 0;
+}
+
+/* Form Group */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.2px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.password-input.error {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.password-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 0.75rem 3rem 0.75rem 0.75rem; /* room for icon */
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.show-toggle {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.18s ease, transform 0.12s ease;
+}
+
+.show-toggle svg { color: var(--text-secondary); }
+
+.show-toggle:focus { outline: none; }
+
+/* When the login is shown as overlay, make the card transparent so the overlay backdrop is visible */
+.login-overlay .login-card,
+.login-overlay .login-card .login-header,
+.login-overlay .login-card .login-content,
+.login-overlay .login-card .login-footer {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+  font-weight: 500;
+}
+
+/* Light mode adjustments to ensure emphasized text */
+:root:not(.dark-mode) .login-card {
+  background: #ffffff;
+  color: #0b1220;
+  border: 1px solid rgba(12,18,28,0.04);
+  box-shadow: 0 8px 30px rgba(15,23,42,0.06);
+}
+
+:root:not(.dark-mode) .login-header {
+  background: transparent;
+  color: #0b1220;
+}
+
+:root:not(.dark-mode) .login-subtitle {
+  color: #475569;
+}
+
+:root:not(.dark-mode) .auth-input,
+:root:not(.dark-mode) .password-input {
+  background: #fff;
+  border: 1px solid rgba(15,23,42,0.06);
+  color: #0b1220;
+  box-shadow: none;
+}
+
+:root:not(.dark-mode) .admin-btn {
+  background: linear-gradient(90deg,#0ea5e9,#2563eb);
+  box-shadow: 0 6px 18px rgba(37,99,235,0.08);
+  color: #fff;
+}
+
+.login-footer {
+  background-color: var(--bg-tertiary);
+  padding: 1rem 1.5rem;
+  text-align: center;
+  border-top: 1px solid var(--border-color);
+}
+
+.footer-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.footer-text svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.footer-text code {
+  background-color: var(--bg-secondary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  color: var(--accent-blue);
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+/* Dark Mode Adjustments */
+:root.dark-mode .login-container {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+:root.dark-mode .password-input {
+  background-color: var(--bg-secondary);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .login-card {
+    border-radius: 8px;
+  }
+
+  .login-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .login-title {
+    font-size: 1.6rem;
+  }
+
+  .login-content {
+    padding: 1.5rem 1rem;
+  }
+
+  .login-section {
+    margin-bottom: 1.25rem;
+  }
+}
+
+/* Overlay modal for sign-in */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2,6,23,0.6);
+  z-index: 1200;
+  padding: 1rem;
+}
+
+.login-modal-close {
+  position: absolute;
+  right: 1.25rem;
+  top: 1.25rem;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  z-index: 1210;
+}
+
+.login-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.login-overlay .login-card {
+  max-width: 560px;
+  width: 100%;
+}
+
+/* Make overlay backdrop blurred and show only the centered login card */
+.login-overlay {
+  background: rgba(2,6,23,0.35);
+  backdrop-filter: blur(6px) saturate(110%);
+}
+
+/* prevent the login container from occupying full viewport inside overlay */
+.login-overlay .login-container {
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+}
+
+/* translucent frosted-card look for the form */
+.login-overlay .login-card {
+  background: rgba(18,20,26,0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+  backdrop-filter: blur(8px) saturate(120%);
+  overflow: hidden;
+}
+
+.login-overlay .login-header {
+  /* Emphasized header band inside the overlay (frosted gradient) */
+  background: linear-gradient(90deg, rgba(34,40,49,0.98) 0%, rgba(26,32,40,0.98) 100%);
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(6px) saturate(130%);
+  color: #f8fafc;
+  text-shadow: 0 2px 6px rgba(2,6,23,0.45);
+}
+
+.login-overlay .login-content,
+.login-overlay .login-footer {
+  background: transparent;
+}
+
+/* Light mode header accent inside overlay */
+:root:not(.dark-mode) .login-overlay .login-header {
+  background: linear-gradient(90deg, rgba(14,165,233,0.22) 0%, rgba(37,99,235,0.22) 100%);
+  color: #0b1220;
+  border-bottom: 1px solid rgba(12,18,28,0.08);
+  text-shadow: 0 1px 2px rgba(15,23,42,0.12);
+}
