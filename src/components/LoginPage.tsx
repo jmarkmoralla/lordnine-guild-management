@@ -53,8 +53,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1 className="login-title">Lordnine Guild</h1>
-          <p className="login-subtitle">Guild Management</p>
+          <h1 className="login-title">Admin Access</h1>
+          <p className="login-subtitle">Lordnine Guild Management</p>
         </div>
 
         <div className="login-content">
