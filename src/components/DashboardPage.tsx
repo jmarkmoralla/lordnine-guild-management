@@ -155,9 +155,10 @@ const getRespawnCountdown = (boss: BossInfo) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' => {
-  const persistedStatus = boss.status === 'alive' ? 'alive' : 'dead';
+const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' | 'unknown' => {
+  const persistedStatus = boss.status === 'alive' ? 'alive' : boss.status === 'unknown' ? 'unknown' : 'dead';
   if (persistedStatus === 'alive') return 'alive';
+  if (persistedStatus === 'unknown') return 'unknown';
 
   const nextRespawnTime = getNextRespawnDate(boss);
   if (!nextRespawnTime) return 'dead';
@@ -190,6 +191,10 @@ const DashboardPage: React.FC = () => {
     .filter((boss) => getDisplayBossStatus(boss) === 'dead')
     .slice()
     .sort(compareByNextRespawn);
+  const unknownBosses = bosses
+    .filter((boss) => getDisplayBossStatus(boss) === 'unknown')
+    .slice()
+    .sort((first, second) => first.level - second.level);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -248,7 +253,7 @@ const DashboardPage: React.FC = () => {
 
       <div className="boss-timers">
         <div className="boss-header">
-          <h3>Boss Timers</h3>
+          <h3>BOSS TIMERS</h3>
           <span className="boss-count">{bosses.length} total</span>
         </div>
         {bossLoading && (
@@ -346,6 +351,34 @@ const DashboardPage: React.FC = () => {
                 ))}
                 {deadBosses.length === 0 && (
                   <div className="boss-empty">No dead bosses</div>
+                )}
+              </div>
+            </div>
+
+            <div className="boss-group boss-group-unknown">
+              <div className="boss-group-header">
+                <span className="boss-group-title">Unknown</span>
+                <span className="boss-group-count">{unknownBosses.length}</span>
+              </div>
+              <div className="boss-grid">
+                {unknownBosses.map((boss) => (
+                  <button key={boss.id} className="boss-card boss-card-unknown" type="button">
+                    <div className="boss-countdown">00:00:00</div>
+                    <img className="boss-image" src={boss.bossImage} alt={boss.name} />
+                    <div className="boss-meta">
+                      <span
+                        className="boss-name"
+                        style={boss.bossType === 'Destroyer' ? { color: '#8b5cf6' } : undefined}
+                      >
+                        {boss.name}
+                      </span>
+                      <span className="boss-subtitle">Level {boss.level}</span>
+                      <div className="boss-next-respawn">Next Respawn: ---</div>
+                    </div>
+                  </button>
+                ))}
+                {unknownBosses.length === 0 && (
+                  <div className="boss-empty">No unknown bosses</div>
                 )}
               </div>
             </div>

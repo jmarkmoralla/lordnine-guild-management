@@ -257,11 +257,34 @@
   background: linear-gradient(135deg, rgba(231, 76, 60, 0.18), rgba(255, 255, 255, 0.04));
 }
 
+
+.boss-group-unknown .boss-group-title {
+  color: #9aa8bd;
+}
+
+.boss-group-unknown .boss-group-count {
+  color: #7e8ca1;
+  background: rgba(126, 140, 161, 0.18);
+}
+
+.boss-group-unknown .boss-card {
+  border-color: rgba(126, 140, 161, 0.35);
+}
+
+.boss-group-unknown .boss-card:hover {
+  border-color: rgba(126, 140, 161, 0.75);
+  background: linear-gradient(135deg, rgba(126, 140, 161, 0.18), rgba(255, 255, 255, 0.04));
+}
+
 .boss-card-dead {
   align-items: center;
 }
 
 .boss-card-respawning {
+  align-items: center;
+}
+
+.boss-card-unknown {
   align-items: center;
 }
 
@@ -586,7 +609,8 @@
 
 .dashboard-page .boss-group-alive,
 .dashboard-page .boss-group-respawning,
-.dashboard-page .boss-group-dead {
+.dashboard-page .boss-group-dead,
+.dashboard-page .boss-group-unknown {
   border-left-width: 3px;
 }
 
@@ -602,15 +626,21 @@
   border-left-color: rgba(231, 76, 60, 0.55);
 }
 
+.dashboard-page .boss-group-unknown {
+  border-left-color: rgba(126, 140, 161, 0.55);
+}
+
 .dashboard-page .boss-group-alive .boss-group-title,
 .dashboard-page .boss-group-respawning .boss-group-title,
-.dashboard-page .boss-group-dead .boss-group-title {
+.dashboard-page .boss-group-dead .boss-group-title,
+.dashboard-page .boss-group-unknown .boss-group-title {
   color: var(--text-secondary);
 }
 
 .dashboard-page .boss-group-alive .boss-group-count,
 .dashboard-page .boss-group-respawning .boss-group-count,
-.dashboard-page .boss-group-dead .boss-group-count {
+.dashboard-page .boss-group-dead .boss-group-count,
+.dashboard-page .boss-group-unknown .boss-group-count {
   color: var(--text-secondary);
 }
 

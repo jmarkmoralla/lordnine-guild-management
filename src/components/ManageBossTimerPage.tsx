@@ -4,7 +4,7 @@ import { Loader, Pencil, Plus, Skull, Trash2, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import '../styles/BossManage.css';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
-import type { BossInfo, BossType, SpawnType } from '../hooks/useFirestoreBossInfo';
+import type { BossInfo, BossStatus, BossType, SpawnType } from '../hooks/useFirestoreBossInfo';
 import {
   formatPhilippinesMonthDayTime12,
   formatPhilippinesDayTime,
@@ -257,11 +257,16 @@ const getNextRespawnDate = (boss: BossInfo) => {
   return new Date(killedDate.getTime() + spawnHours * 60 * 60 * 1000);
 };
 
-const getPersistedBossStatus = (boss: BossInfo) => (boss.status === 'alive' ? 'alive' : 'dead');
+const getPersistedBossStatus = (boss: BossInfo): BossStatus => {
+  if (boss.status === 'alive') return 'alive';
+  if (boss.status === 'unknown') return 'unknown';
+  return 'dead';
+};
 
-const getDisplayBossStatus = (boss: BossInfo) => {
+const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' | 'unknown' => {
   const persistedStatus = getPersistedBossStatus(boss);
   if (persistedStatus === 'alive') return 'alive';
+  if (persistedStatus === 'unknown') return 'unknown';
 
   const nextRespawn = getNextRespawnDate(boss);
 
@@ -325,6 +330,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showDeadModal, setShowDeadModal] = useState<BossInfo | null>(null);
   const [deadTimeInput, setDeadTimeInput] = useState('');
+  const [isUnknownKillTime, setIsUnknownKillTime] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newBoss, setNewBoss] = useState<BossInfo>({ ...defaultBoss });
@@ -479,7 +485,13 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   const handleMarkAsDead = async (boss: BossInfo) => {
     const now = getPhilippinesNow();
     setDeadTimeInput(now.slice(0, 16));
+    setIsUnknownKillTime(false);
     setShowDeadModal(boss);
+  };
+
+  const closeDeadModal = () => {
+    setShowDeadModal(null);
+    setIsUnknownKillTime(false);
   };
 
   const handleConfirmDead = async () => {
@@ -487,10 +499,10 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
     try {
       setSaving(true);
       await updateBoss(showDeadModal.id, {
-        status: 'dead',
-        killedTime: toPhilippinesDateTimeFromLocal(deadTimeInput),
+        status: isUnknownKillTime ? 'unknown' : 'dead',
+        killedTime: isUnknownKillTime ? '' : toPhilippinesDateTimeFromLocal(deadTimeInput),
       });
-      setShowDeadModal(null);
+      closeDeadModal();
     } catch (err) {
       console.error('Failed to mark boss as dead:', err);
     } finally {
@@ -557,6 +569,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
           <option value="alive">Alive</option>
           <option value="respawning">Respawning</option>
           <option value="dead">Dead</option>
+          <option value="unknown">Unknown</option>
         </select>
         <button className="refresh-btn-filter" onClick={() => setShowAddModal(true)}>
           <Plus size={16} strokeWidth={1.8} />
@@ -882,10 +895,11 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <label>Status</label>
                   <select
                     value={newBoss.status}
-                    onChange={(event) => setNewBoss({ ...newBoss, status: event.target.value })}
+                    onChange={(event) => setNewBoss({ ...newBoss, status: event.target.value as BossStatus })}
                   >
                     <option value="alive">Alive</option>
                     <option value="dead">Dead</option>
+                    <option value="unknown">Unknown</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -1132,10 +1146,11 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <label>Status</label>
                   <select
                     value={editingBoss.status}
-                    onChange={(event) => setEditingBoss({ ...editingBoss, status: event.target.value })}
+                    onChange={(event) => setEditingBoss({ ...editingBoss, status: event.target.value as BossStatus })}
                   >
                     <option value="alive">Alive</option>
                     <option value="dead">Dead</option>
+                    <option value="unknown">Unknown</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -1205,29 +1220,48 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
       )}
 
       {showDeadModal && (
-        <div className="modal-overlay" onClick={() => setShowDeadModal(null)}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-overlay" onClick={closeDeadModal}>
+          <div className="modal-content dead-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h3>Mark as Dead</h3>
-              <button className="modal-close" onClick={() => setShowDeadModal(null)} aria-label="Close">
+              <div className="dead-modal-heading">
+                <h3>Mark as Dead</h3>
+                <p className="dead-modal-subtitle">Set the kill timestamp or mark it as unknown.</p>
+              </div>
+              <button className="modal-close" onClick={closeDeadModal} aria-label="Close">
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
+            <div className="modal-body dead-modal-body">
+              <div className="form-group dead-time-group">
                 <label>Kill Time (PH)</label>
                 <input
+                  className="dead-time-input"
                   type="datetime-local"
                   value={deadTimeInput}
                   onChange={(event) => setDeadTimeInput(event.target.value)}
+                  disabled={isUnknownKillTime}
                 />
+              </div>
+              <div className="form-group unknown-kill-time-group">
+                <label className="unknown-kill-time-toggle">
+                  <input
+                    type="checkbox"
+                    checked={isUnknownKillTime}
+                    onChange={(event) => setIsUnknownKillTime(event.target.checked)}
+                  />
+                  <span>Unknown last kill timestamp</span>
+                </label>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowDeadModal(null)} disabled={saving}>
+              <button className="btn-secondary" onClick={closeDeadModal} disabled={saving}>
                 Cancel
               </button>
-              <button className="btn-danger" onClick={handleConfirmDead} disabled={saving || !deadTimeInput}>
+              <button
+                className="btn-danger"
+                onClick={handleConfirmDead}
+                disabled={saving || (!isUnknownKillTime && !deadTimeInput)}
+              >
                 Mark as Dead
               </button>
             </div>
