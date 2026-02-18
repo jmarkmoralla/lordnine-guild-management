@@ -167,7 +167,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsClearingAll(true);
     setDraftAttendanceByMemberId((current) => {
       const nextDraft = { ...current };
-      membersWithAttendance
+      members
         .filter((member) => member.id)
         .forEach((member) => {
           nextDraft[member.id as string] = 'unmarked';
@@ -275,11 +275,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const saveAttendanceFromModal = async () => {
     if (!canManage) return;
 
-    const presentMemberNames = membersWithAttendance
-      .filter((member) => {
-        if (!member.id) return false;
-        return draftAttendanceByMemberId[member.id] === 'present';
-      })
+    const membersToPersist = members.filter((member): member is typeof member & { id: string } => Boolean(member.id));
+
+    const presentMemberNames = membersToPersist
+      .filter((member) => draftAttendanceByMemberId[member.id] === 'present')
       .map((member) => member.name)
       .filter(Boolean);
 
@@ -292,11 +291,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       setCreateAttendanceError(null);
       setIsSavingAttendanceData(true);
       setIsSyncingAttendanceSummary(true);
-
-      const membersToPersist = membersWithAttendance.filter((member) => member.id) as Array<{
-        id: string;
-        name: string;
-      }>;
 
       await Promise.all(
         membersToPersist.map(async (member) => {
