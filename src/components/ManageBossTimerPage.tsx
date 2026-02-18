@@ -274,8 +274,8 @@ const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' |
 
   const now = getPhilippinesNowDate();
   const timeUntilRespawn = nextRespawn.getTime() - now.getTime();
-  if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
   if (timeUntilRespawn <= 0) return 'alive';
+  if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
   return 'dead';
 };
 

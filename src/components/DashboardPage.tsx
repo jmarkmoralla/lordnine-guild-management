@@ -176,8 +176,8 @@ const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' |
 
   const now = getPhilippinesNowDate();
   const timeUntilRespawn = nextRespawnTime.getTime() - now.getTime();
-  if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
   if (timeUntilRespawn <= 0) return 'alive';
+  if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
   return 'dead';
 };
 
@@ -544,7 +544,7 @@ const DashboardPage: React.FC = () => {
       )}
 
       <div className="recent-activity">
-        <h3>Recent Activity</h3>
+        <h3>Recent Activities</h3>
         {loading && (
           <div className="loading-state">
             <p>Loading activities... <Loader size={16} strokeWidth={1.8} /></p>
