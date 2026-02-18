@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Loader, Pencil, Plus, Skull, Trash2, X } from 'lucide-react';
+import { Clock3, Loader, Pencil, Plus, Skull, Trash2, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import '../styles/BossManage.css';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
@@ -238,7 +238,7 @@ const getNextSpawnTime = (boss: BossInfo): ReactNode => {
 
 const getNextRespawnDate = (boss: BossInfo) => {
   if (boss.spawnType === 'scheduled') {
-    const isDead = boss.status !== 'alive';
+    const isDead = boss.status === 'dead';
     const killedDate = boss.killedTime ? new Date(boss.killedTime) : null;
     const referenceDate = isDead && killedDate && !Number.isNaN(killedDate.getTime())
       ? killedDate
@@ -274,8 +274,8 @@ const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' |
 
   const now = getPhilippinesNowDate();
   const timeUntilRespawn = nextRespawn.getTime() - now.getTime();
-  if (timeUntilRespawn <= 0) return 'alive';
   if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
+  if (timeUntilRespawn <= 0) return 'alive';
   return 'dead';
 };
 
@@ -618,7 +618,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
               const persistedStatus = getPersistedBossStatus(boss);
 
               return (
-              <tr key={boss.id}>
+              <tr key={boss.id} className={boss.spawnType === 'scheduled' ? 'boss-row-scheduled' : undefined}>
                 <td className="col-image">
                   <img className="boss-table-image" src={boss.bossImage} alt={boss.name} />
                 </td>
@@ -629,6 +629,12 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                     {boss.name}
                   </span>
                   <span className="boss-level-text">Level {boss.level}</span>
+                  {boss.spawnType === 'scheduled' && (
+                    <span className="boss-scheduled-indicator">
+                      <Clock3 size={12} strokeWidth={2} />
+                      Scheduled
+                    </span>
+                  )}
                 </td>
                 <td className="col-spawn">
                   {boss.spawnType === 'scheduled'

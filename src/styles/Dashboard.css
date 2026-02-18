@@ -177,6 +177,11 @@
   outline-offset: 2px;
 }
 
+.boss-card-active {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.26), 0 6px 16px var(--shadow-medium);
+}
+
 .boss-image {
   width: 60px;
   height: calc(100% - 0.4rem);
@@ -325,6 +330,28 @@
   color: var(--text-secondary);
 }
 
+.boss-scheduled-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  width: fit-content;
+  margin-top: 0.2rem;
+  padding: 0.14rem 0.44rem;
+  border-radius: 999px;
+  border: 1px solid rgba(74, 144, 226, 0.38);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.2), rgba(74, 144, 226, 0.08));
+  color: #8fc5ff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03rem;
+  box-shadow: 0 1px 4px var(--shadow-light);
+}
+
+.boss-scheduled-indicator svg {
+  opacity: 0.92;
+}
+
 .boss-empty {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -332,6 +359,196 @@
   background: var(--bg-tertiary);
   border-radius: 8px;
   border: 1px dashed var(--border-light);
+}
+
+.boss-tooltip-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: transparent;
+}
+
+.boss-tooltip-panel {
+  position: fixed;
+  width: min(92vw, 520px);
+  border: 1px solid rgba(74, 144, 226, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(155deg, rgba(26, 35, 50, 0.96), rgba(20, 27, 40, 0.96));
+  box-shadow: 0 14px 34px var(--shadow-medium), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  overflow: hidden;
+  animation: bossTooltipIn 0.18s ease-out;
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.boss-tooltip-panel:hover {
+  border-color: rgba(74, 144, 226, 0.45);
+  box-shadow: 0 16px 36px var(--shadow-medium), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+.boss-tooltip-panel::before,
+.boss-tooltip-panel::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+}
+
+.boss-tooltip-panel.boss-tooltip-bottom::before {
+  top: -11px;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-bottom: 11px solid rgba(74, 144, 226, 0.28);
+}
+
+.boss-tooltip-panel.boss-tooltip-bottom::after {
+  top: -9px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid rgba(26, 35, 50, 0.96);
+}
+
+.boss-tooltip-panel.boss-tooltip-top::before {
+  bottom: -11px;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-top: 11px solid rgba(74, 144, 226, 0.28);
+}
+
+.boss-tooltip-panel.boss-tooltip-top::after {
+  bottom: -9px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid rgba(20, 27, 40, 0.96);
+}
+
+@keyframes bossTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.boss-tooltip-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.9rem 2rem 0.9rem 1rem;
+  border-bottom: 1px solid rgba(126, 140, 161, 0.28);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.12), rgba(74, 144, 226, 0.02));
+}
+
+.boss-tooltip-header h4 {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02rem;
+}
+
+.boss-tooltip-close {
+  position: absolute;
+  top: 0.62rem;
+  right: 0.72rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1.18rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.boss-tooltip-close:hover {
+  color: #ffffff;
+  transform: scale(1.06);
+}
+
+.boss-tooltip-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem 0.8rem;
+}
+
+.boss-tooltip-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 4px 12px var(--shadow-light);
+}
+
+.boss-tooltip-name-wrap {
+  min-width: 0;
+}
+
+.boss-tooltip-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--boss-field-color);
+}
+
+.boss-tooltip-name-destroyer {
+  color: var(--boss-destroyer-color);
+}
+
+.boss-tooltip-type {
+  margin-top: 0.22rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.boss-tooltip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.56rem;
+  padding: 0.2rem 1rem 1rem;
+}
+
+.boss-tooltip-item {
+  border: 1px solid rgba(126, 140, 161, 0.28);
+  border-radius: 10px;
+  padding: 0.55rem 0.62rem;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.boss-tooltip-item:hover {
+  border-color: rgba(74, 144, 226, 0.38);
+  transform: translateY(-1px);
+}
+
+.boss-tooltip-item span {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  letter-spacing: 0.03rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.boss-tooltip-item strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Recent Activity */

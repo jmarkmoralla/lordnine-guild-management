@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Crown, Trophy, Users, Loader } from 'lucide-react';
+import { Crown, Trophy, Users, Loader, Clock3 } from 'lucide-react';
 import '../styles/Dashboard.css';
 import { useFirestoreActivities } from '../hooks/useFirestoreActivities';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
@@ -83,7 +83,7 @@ const getNextScheduledOccurrence = (boss: BossInfo, referenceDate?: Date) => {
 
 const getNextRespawnDate = (boss: BossInfo) => {
   if (boss.spawnType === 'scheduled') {
-    const isDead = boss.status !== 'alive';
+    const isDead = boss.status === 'dead';
     const killedDate = boss.killedTime ? new Date(boss.killedTime) : null;
     const hasValidKilledDate = Boolean(killedDate && !Number.isNaN(killedDate.getTime()));
 
@@ -155,6 +155,17 @@ const getRespawnCountdown = (boss: BossInfo) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
+const renderScheduledIndicator = (boss: BossInfo): ReactNode => {
+  if (boss.spawnType !== 'scheduled') return null;
+
+  return (
+    <span className="boss-scheduled-indicator">
+      <Clock3 size={12} strokeWidth={2} />
+      Scheduled
+    </span>
+  );
+};
+
 const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' | 'unknown' => {
   const persistedStatus = boss.status === 'alive' ? 'alive' : boss.status === 'unknown' ? 'unknown' : 'dead';
   if (persistedStatus === 'alive') return 'alive';
@@ -165,9 +176,45 @@ const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' |
 
   const now = getPhilippinesNowDate();
   const timeUntilRespawn = nextRespawnTime.getTime() - now.getTime();
-  if (timeUntilRespawn <= 0) return 'alive';
   if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
+  if (timeUntilRespawn <= 0) return 'alive';
   return 'dead';
+};
+
+const getBossSpawnTimeLabel = (boss: BossInfo) => {
+  if (boss.spawnType !== 'scheduled') return `${boss.spawnTime}h`;
+
+  if (boss.bossType === 'Destroyer') {
+    const first = boss.scheduledStartTime || '-';
+    const second = boss.scheduledEndTime || '-';
+    return `Daily ${first} / Daily ${second}`;
+  }
+
+  const firstDay = boss.scheduledStartDay || '-';
+  const firstTime = boss.scheduledStartTime || '-';
+  const secondDay = boss.scheduledEndDay || '-';
+  const secondTime = boss.scheduledEndTime || '-';
+  return `${firstDay} ${firstTime} / ${secondDay} ${secondTime}`;
+};
+
+const getBossDetailNextRespawn = (boss: BossInfo) => {
+  if (getDisplayBossStatus(boss) === 'unknown') return '-';
+
+  const nextRespawn = getNextRespawnDate(boss);
+  if (!nextRespawn) return 'N/A';
+
+  return formatPhilippinesMonthDayTime12(nextRespawn);
+};
+
+const getBossDetailSpawnType = (boss: BossInfo) => (boss.spawnType === 'scheduled' ? 'Scheduled' : 'Fixed');
+
+const getBossDetailStatus = (boss: BossInfo) => {
+  const status = getDisplayBossStatus(boss);
+
+  if (status === 'respawning') return 'Respawning';
+  if (status === 'alive') return 'Alive';
+  if (status === 'dead') return 'Dead';
+  return 'Unknown';
 };
 
 const DashboardPage: React.FC = () => {
@@ -176,6 +223,9 @@ const DashboardPage: React.FC = () => {
   const { guildInfo, loading: guildLoading } = useFirestoreGuildInfo();
   const { bosses, loading: bossLoading } = useFirestoreBossInfo();
   const [, setStatusTick] = useState(0);
+  const [selectedBoss, setSelectedBoss] = useState<BossInfo | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const [tooltipPlacement, setTooltipPlacement] = useState<'top' | 'bottom'>('bottom');
   
   const guildMaster = members.find((member) => member.memberType === 'guild master');
   const recentActivities = activities.slice(0, 5);
@@ -203,6 +253,46 @@ const DashboardPage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectedBoss(null);
+        setTooltipPosition(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  const openBossDetails = (boss: BossInfo, cardElement: HTMLElement) => {
+    const rect = cardElement.getBoundingClientRect();
+    const tooltipWidth = 520;
+    const tooltipHeight = 320;
+    const gap = 10;
+
+    const initialTop = rect.bottom + gap;
+    const shouldPlaceAbove = initialTop + tooltipHeight > window.innerHeight - 8;
+    const top = initialTop + tooltipHeight > window.innerHeight - 8
+      ? Math.max(8, rect.top - tooltipHeight - gap)
+      : initialTop;
+
+    const initialLeft = rect.left + rect.width / 2 - tooltipWidth / 2;
+    const left = Math.min(
+      Math.max(8, initialLeft),
+      Math.max(8, window.innerWidth - tooltipWidth - 8)
+    );
+
+    setSelectedBoss(boss);
+    setTooltipPosition({ top, left });
+    setTooltipPlacement(shouldPlaceAbove ? 'top' : 'bottom');
+  };
+
+  const closeBossDetails = () => {
+    setSelectedBoss(null);
+    setTooltipPosition(null);
+  };
 
   return (
     <div className="page-container dashboard-page">
@@ -275,7 +365,12 @@ const DashboardPage: React.FC = () => {
               </div>
               <div className="boss-grid">
                 {aliveBosses.map((boss) => (
-                  <button key={boss.id} className="boss-card" type="button">
+                  <button
+                    key={boss.id}
+                    className={`boss-card ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
+                    type="button"
+                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
+                  >
                     <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
@@ -286,6 +381,7 @@ const DashboardPage: React.FC = () => {
                         {boss.name}
                       </span>
                       <span className="boss-subtitle">Level {boss.level}</span>
+                      {renderScheduledIndicator(boss)}
                     </div>
                   </button>
                 ))}
@@ -302,7 +398,12 @@ const DashboardPage: React.FC = () => {
               </div>
               <div className="boss-grid">
                 {respawningBosses.map((boss) => (
-                  <button key={boss.id} className="boss-card boss-card-respawning" type="button">
+                  <button
+                    key={boss.id}
+                    className={`boss-card boss-card-respawning ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
+                    type="button"
+                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
+                  >
                     <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
@@ -313,6 +414,7 @@ const DashboardPage: React.FC = () => {
                         {boss.name}
                       </span>
                       <span className="boss-subtitle">Level {boss.level}</span>
+                      {renderScheduledIndicator(boss)}
                       <div className="boss-next-respawn">
                         {getNextSpawnTime(boss)}
                       </div>
@@ -332,7 +434,12 @@ const DashboardPage: React.FC = () => {
               </div>
               <div className="boss-grid">
                 {deadBosses.map((boss) => (
-                  <button key={boss.id} className="boss-card boss-card-dead" type="button">
+                  <button
+                    key={boss.id}
+                    className={`boss-card boss-card-dead ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
+                    type="button"
+                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
+                  >
                     <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
@@ -343,6 +450,7 @@ const DashboardPage: React.FC = () => {
                         {boss.name}
                       </span>
                       <span className="boss-subtitle">Level {boss.level}</span>
+                      {renderScheduledIndicator(boss)}
                       <div className="boss-next-respawn">
                         {getNextSpawnTime(boss)}
                       </div>
@@ -362,7 +470,12 @@ const DashboardPage: React.FC = () => {
               </div>
               <div className="boss-grid">
                 {unknownBosses.map((boss) => (
-                  <button key={boss.id} className="boss-card boss-card-unknown" type="button">
+                  <button
+                    key={boss.id}
+                    className={`boss-card boss-card-unknown ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
+                    type="button"
+                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
+                  >
                     <div className="boss-countdown">00:00:00</div>
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
@@ -373,6 +486,7 @@ const DashboardPage: React.FC = () => {
                         {boss.name}
                       </span>
                       <span className="boss-subtitle">Level {boss.level}</span>
+                      {renderScheduledIndicator(boss)}
                       <div className="boss-next-respawn">Next Respawn: ---</div>
                     </div>
                   </button>
@@ -385,6 +499,49 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {selectedBoss && tooltipPosition && (
+        <div className="boss-tooltip-overlay" onClick={closeBossDetails}>
+          <div
+            className={`boss-tooltip-panel boss-tooltip-${tooltipPlacement}`}
+            style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="boss-tooltip-header">
+              <h4>Boss Details</h4>
+              <button
+                type="button"
+                className="boss-tooltip-close"
+                onClick={closeBossDetails}
+                aria-label="Close boss details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="boss-tooltip-main">
+              <img className="boss-tooltip-image" src={selectedBoss.bossImage} alt={selectedBoss.name} />
+              <div className="boss-tooltip-name-wrap">
+                <div
+                  className={`boss-tooltip-name ${selectedBoss.bossType === 'Destroyer' ? 'boss-tooltip-name-destroyer' : ''}`}
+                >
+                  {selectedBoss.name}
+                </div>
+                <div className="boss-tooltip-type">{selectedBoss.bossType}</div>
+              </div>
+            </div>
+
+            <div className="boss-tooltip-grid">
+              <div className="boss-tooltip-item"><span>Level</span><strong>{selectedBoss.level}</strong></div>
+              <div className="boss-tooltip-item"><span>Spawn Type</span><strong>{getBossDetailSpawnType(selectedBoss)}</strong></div>
+              <div className="boss-tooltip-item"><span>Spawn Time</span><strong>{getBossSpawnTimeLabel(selectedBoss)}</strong></div>
+              <div className="boss-tooltip-item"><span>Spawn Region</span><strong>{selectedBoss.spawnRegion || 'N/A'}</strong></div>
+              <div className="boss-tooltip-item"><span>Status</span><strong>{getBossDetailStatus(selectedBoss)}</strong></div>
+              <div className="boss-tooltip-item"><span>Next Respawn</span><strong>{getBossDetailNextRespawn(selectedBoss)}</strong></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="recent-activity">
         <h3>Recent Activity</h3>
