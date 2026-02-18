@@ -168,6 +168,12 @@
   border-color: rgba(231, 76, 60, 0.4);
 }
 
+.status-unknown {
+  background: rgba(126, 140, 161, 0.18);
+  color: #9aa8bd;
+  border-color: rgba(126, 140, 161, 0.4);
+}
+
 .image-preview {
   margin-top: 0.8rem;
   border-radius: 12px;
@@ -266,9 +272,135 @@
   border-radius: 10px;
 }
 
+.dead-modal {
+  width: min(92vw, 460px);
+  max-width: 460px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+}
+
+.dead-modal .modal-header {
+  padding: 1.15rem 1.2rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dead-modal-heading {
+  min-width: 0;
+}
+
+.dead-modal .modal-header h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.dead-modal-subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.dead-modal-body {
+  padding: 1rem 1.2rem;
+}
+
+.dead-modal .modal-footer {
+  padding: 0.95rem 1.2rem 1.1rem;
+  gap: 0.6rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.dead-modal .btn-secondary,
+.dead-modal .btn-danger {
+  min-height: 36px;
+  padding: 0.55rem 1rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+}
+
+.dead-time-group {
+  margin-bottom: 0.75rem;
+}
+
+.dead-modal .form-group label {
+  margin-bottom: 0.4rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.28px;
+}
+
+.dead-time-input {
+  min-height: 40px;
+}
+
+.dead-time-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.dead-time-hint {
+  margin: 0.45rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.dead-modal .unknown-kill-time-group {
+  margin-top: 0.1rem;
+  margin-bottom: 0;
+}
+
+.dead-modal .unknown-kill-time-toggle {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.62rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dead-modal .unknown-kill-time-toggle:hover {
+  border-color: var(--accent-blue);
+  background: var(--bg-tertiary);
+  box-shadow: 0 2px 8px var(--shadow-light);
+}
+
+.dead-modal .unknown-kill-time-toggle:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--shadow-light), 0 2px 8px var(--shadow-light);
+}
+
+.dead-modal .unknown-kill-time-toggle input[type='checkbox'] {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.dead-modal .unknown-kill-time-toggle span {
+  font-weight: 400;
+}
+
+.dead-modal .modal-close {
+  border: 1px solid var(--border-light);
+}
+
 @media (max-width: 900px) {
   .boss-modal {
     width: 92%;
+  }
+
+  .dead-modal {
+    width: 94%;
   }
 
   .boss-modal .modal-header,

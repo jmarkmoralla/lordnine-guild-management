@@ -13,6 +13,7 @@ import { db } from '../config/firebase';
 
 export type BossType = 'Field Boss' | 'Destroyer' | 'Guild Boss';
 export type SpawnType = 'fixed' | 'scheduled';
+export type BossStatus = 'alive' | 'dead' | 'unknown';
 
 export interface BossInfo {
   id?: string;
@@ -30,10 +31,14 @@ export interface BossInfo {
   spawnRegion: string;
   bossImage: string;
   killedTime: string;
-  status: string;
+  status: BossStatus;
 }
 
-const getPersistedStatus = (status?: string) => (status === 'alive' ? 'alive' : 'dead');
+const getPersistedStatus = (status?: string): BossStatus => {
+  if (status === 'alive') return 'alive';
+  if (status === 'unknown') return 'unknown';
+  return 'dead';
+};
 
 interface UseFirestoreBossInfoReturn {
   bosses: BossInfo[];
@@ -94,7 +99,7 @@ export const useFirestoreBossInfo = (): UseFirestoreBossInfoReturn => {
     try {
       await addDoc(collection(db, 'bossInfo'), {
         ...boss,
-        status: boss.status === 'alive' ? 'alive' : 'dead',
+        status: getPersistedStatus(boss.status),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add boss');
@@ -107,7 +112,7 @@ export const useFirestoreBossInfo = (): UseFirestoreBossInfoReturn => {
       const normalizedUpdates: Partial<BossInfo> = {
         ...updates,
         ...(updates.status !== undefined
-          ? { status: updates.status === 'alive' ? 'alive' : 'dead' }
+          ? { status: getPersistedStatus(updates.status) }
           : {}),
       };
 
