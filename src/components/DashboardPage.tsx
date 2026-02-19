@@ -375,8 +375,7 @@ const DashboardPage: React.FC = () => {
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
                       <span 
-                        className="boss-name" 
-                        style={boss.bossType === 'Destroyer' ? { color: '#8b5cf6' } : undefined}
+                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
                       >
                         {boss.name}
                       </span>
@@ -408,8 +407,7 @@ const DashboardPage: React.FC = () => {
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
                       <span 
-                        className="boss-name" 
-                        style={boss.bossType === 'Destroyer' ? { color: '#8b5cf6' } : undefined}
+                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
                       >
                         {boss.name}
                       </span>
@@ -444,8 +442,7 @@ const DashboardPage: React.FC = () => {
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
                       <span 
-                        className="boss-name" 
-                        style={boss.bossType === 'Destroyer' ? { color: '#8b5cf6' } : undefined}
+                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
                       >
                         {boss.name}
                       </span>
@@ -480,8 +477,7 @@ const DashboardPage: React.FC = () => {
                     <img className="boss-image" src={boss.bossImage} alt={boss.name} />
                     <div className="boss-meta">
                       <span
-                        className="boss-name"
-                        style={boss.bossType === 'Destroyer' ? { color: '#8b5cf6' } : undefined}
+                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
                       >
                         {boss.name}
                       </span>
@@ -523,7 +519,7 @@ const DashboardPage: React.FC = () => {
               <img className="boss-tooltip-image" src={selectedBoss.bossImage} alt={selectedBoss.name} />
               <div className="boss-tooltip-name-wrap">
                 <div
-                  className={`boss-tooltip-name ${selectedBoss.bossType === 'Destroyer' ? 'boss-tooltip-name-destroyer' : ''}`}
+                  className={`boss-tooltip-name ${selectedBoss.bossType === 'Destroyer' ? 'boss-tooltip-name-destroyer' : selectedBoss.bossType === 'Guild Boss' ? 'boss-tooltip-name-guild' : ''}`}
                 >
                   {selectedBoss.name}
                 </div>

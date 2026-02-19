@@ -74,13 +74,40 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     upsertAttendance,
   } = useFirestoreAttendance(selectedDate, attendanceType, bossName);
 
-  const forceDashBossName = attendanceType === 'Guild Boss' || attendanceType === 'Guild vs. Guild';
+  const forceDashBossName = attendanceType === 'Guild vs. Guild';
   const activeStatusFilter = canManage ? 'all' : statusFilter;
 
-  const bossNameOptions = useMemo(
-    () => Array.from(new Set(bosses.map((boss) => boss.name).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
-    [bosses]
-  );
+  const bossNameOptions = useMemo(() => {
+    const filteredBosses = attendanceType === 'Guild Boss'
+      ? bosses.filter((boss) => boss.bossType === 'Guild Boss')
+      : bosses;
+
+    const uniqueBossesByName = new Map<string, (typeof filteredBosses)[number]>();
+    filteredBosses.forEach((boss) => {
+      if (!boss.name) return;
+
+      const existingBoss = uniqueBossesByName.get(boss.name);
+      if (!existingBoss || boss.level > existingBoss.level) {
+        uniqueBossesByName.set(boss.name, boss);
+      }
+    });
+
+    const uniqueBosses = Array.from(uniqueBossesByName.values());
+
+    if (attendanceType === 'Guild Boss') {
+      return uniqueBosses
+        .sort((first, second) => {
+          const levelDiff = second.level - first.level;
+          if (levelDiff !== 0) return levelDiff;
+          return first.name.localeCompare(second.name);
+        })
+        .map((boss) => boss.name);
+    }
+
+    return uniqueBosses
+      .map((boss) => boss.name)
+      .sort((first, second) => first.localeCompare(second));
+  }, [bosses, attendanceType]);
 
   useEffect(() => {
     if (forceDashBossName) {
@@ -90,7 +117,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       return;
     }
 
-    if (bossNameOptions.length === 0) return;
+    if (bossNameOptions.length === 0) {
+      if (bossName !== '') {
+        setBossName('');
+      }
+      return;
+    }
     if (!bossName || !bossNameOptions.includes(bossName)) {
       setBossName(bossNameOptions[0]);
     }

@@ -119,6 +119,10 @@
   color: var(--boss-destroyer-color);
 }
 
+.boss-name-text-guild {
+  color: var(--boss-guild-color);
+}
+
 .boss-level-text {
   display: block;
   font-size: 0.8rem;
@@ -167,6 +171,10 @@
 
 .delete-boss-name-destroyer {
   color: var(--boss-destroyer-color);
+}
+
+.delete-boss-name-guild {
+  color: var(--boss-guild-color);
 }
 
 .status-badge {
