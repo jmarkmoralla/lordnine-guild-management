@@ -604,6 +604,16 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
           </thead>
           <tbody>
             {filteredBosses.sort((a, b) => {
+              const statusA = getDisplayBossStatus(a);
+              const statusB = getDisplayBossStatus(b);
+              const statusOrder = { alive: 0, respawning: 1, dead: 2, unknown: 2 };
+              const statusRankA = statusOrder[statusA];
+              const statusRankB = statusOrder[statusB];
+
+              if (statusRankA !== statusRankB) {
+                return statusRankA - statusRankB;
+              }
+
               const bossTypeOrder = { 'Field Boss': 0, 'Destroyer': 1, 'Guild Boss': 2 };
               const typeA = bossTypeOrder[a.bossType as keyof typeof bossTypeOrder] ?? 3;
               const typeB = bossTypeOrder[b.bossType as keyof typeof bossTypeOrder] ?? 3;
@@ -624,7 +634,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                 </td>
                 <td className="col-name">
                   <span 
-                    className={`boss-name-text ${boss.bossType === 'Destroyer' ? 'boss-name-text-destroyer' : ''}`}
+                    className={`boss-name-text ${boss.bossType === 'Destroyer' ? 'boss-name-text-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-text-guild' : ''}`}
                   >
                     {boss.name}
                   </span>
@@ -1202,7 +1212,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
               <p>
                 Are you sure you want to delete{' '}
                 <span
-                  className={`delete-boss-name ${deletingBoss?.bossType === 'Destroyer' ? 'delete-boss-name-destroyer' : 'delete-boss-name-field'}`}
+                  className={`delete-boss-name ${deletingBoss?.bossType === 'Destroyer' ? 'delete-boss-name-destroyer' : deletingBoss?.bossType === 'Guild Boss' ? 'delete-boss-name-guild' : 'delete-boss-name-field'}`}
                 >
                   {deletingBoss?.name}
                 </span>

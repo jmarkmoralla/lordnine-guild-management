@@ -202,8 +202,16 @@
 
 .boss-name {
   font-weight: 600;
-  color: #e74c3c;
+  color: var(--boss-field-color);
   padding-right: 4.7rem;
+}
+
+.boss-name-destroyer {
+  color: var(--boss-destroyer-color);
+}
+
+.boss-name-guild {
+  color: var(--boss-guild-color);
 }
 
 .boss-group-alive .boss-group-title {
@@ -501,6 +509,10 @@
 
 .boss-tooltip-name-destroyer {
   color: var(--boss-destroyer-color);
+}
+
+.boss-tooltip-name-guild {
+  color: var(--boss-guild-color);
 }
 
 .boss-tooltip-type {
