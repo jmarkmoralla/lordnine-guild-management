@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Bell,
   Clock,
   Crown,
   LayoutDashboard,
@@ -35,6 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
         { id: 'manage-boss-timer', label: 'Manage Boss Timer', icon: <Clock size={18} strokeWidth={1.75} /> },
         { id: 'manage-attendance', label: 'Manage Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
         { id: 'manage-members', label: 'Manage Members', icon: <Users size={18} strokeWidth={1.75} /> },
+        { id: 'manage-boss-notifier', label: 'Field Boss Notifier', icon: <Bell size={18} strokeWidth={1.75} /> },
       ]
     : [];
 

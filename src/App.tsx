@@ -7,8 +7,10 @@ import ManageGuildAttendancePage from './components/ManageGuildAttendancePage'
 import RankingsPage from './components/RankingsPage'
 import MembersManagePage from './components/MembersManagePage'
 import ManageBossTimerPage from './components/ManageBossTimerPage'
+import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
 import LoginPage from './components/LoginPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
+import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
 import { createDefaultAdminUser } from './data/createDefaultAdmin'
 import { seedFirestoreDatabase } from './data/seedDatabase'
 import './App.css'
@@ -27,6 +29,8 @@ function App() {
 
   // Determine user type from Firebase auth state (treat not-logged-in as guest view)
   const userType: 'guest' | 'admin' = isAdmin ? 'admin' : 'guest'
+
+  useDailyBossDiscordNotifier({ enabled: isAdmin })
 
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(isDarkMode))
@@ -75,6 +79,8 @@ function App() {
         return <MembersManagePage userType={userType!} />
       case 'manage-boss-timer':
         return <ManageBossTimerPage userType={userType!} />
+      case 'manage-boss-notifier':
+        return <BossNotifierSettingsPage userType={userType!} />
       case 'boss-timer':
         return <ManageBossTimerPage userType={userType!} />
       default:
