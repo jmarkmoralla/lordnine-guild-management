@@ -101,7 +101,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
   return (
     <div className="page-container boss-notifier-page">
       <div className="page-header">
-        <h2>Boss Discord Notifier</h2>
+        <h2>Field Boss Discord Notifier</h2>
         <p className="page-subtitle">Configure daily boss respawn notifications and select included bosses</p>
       </div>
 
