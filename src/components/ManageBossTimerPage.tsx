@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Clock3, Loader, Pencil, Plus, Skull, Trash2, X } from 'lucide-react';
+import { Clock3, Loader, Pencil, Plus, Search, Skull, Trash2, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import '../styles/BossManage.css';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
@@ -532,12 +532,17 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
       </div>
 
       <div className="rankings-filters boss-filters">
-        <div className="boss-search-box">
+        <div className="boss-search-box" role="search">
+          <span className="boss-search-icon" aria-hidden="true">
+            <Search size={14} strokeWidth={1.9} />
+          </span>
           <input
+            type="text"
             className="boss-search-input"
-            placeholder="Search boss name"
+            placeholder="Search boss name..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Search boss name"
           />
           {searchQuery && (
             <button
