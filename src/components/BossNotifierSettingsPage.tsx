@@ -180,7 +180,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
       <div className="notifier-card">
         <div className="notifier-selection-header">
           <div>
-            <h3>Included Bosses</h3>
+            <h3>Selected Bosses</h3>
             <p>Only selected bosses will appear in the daily message</p>
           </div>
           <span className="notifier-count-badge">{enabledBossIds.length} selected</span>
@@ -214,6 +214,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
           {filteredBosses.map((boss) => (
             <label key={boss.id} className="notifier-boss-item">
               <input
+                className="notifier-boss-checkbox"
                 type="checkbox"
                 checked={Boolean(boss.id && enabledBossIds.includes(boss.id))}
                 onChange={() => boss.id && toggleBoss(boss.id)}
