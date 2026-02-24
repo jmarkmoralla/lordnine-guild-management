@@ -8,6 +8,7 @@ import RankingsPage from './components/RankingsPage'
 import MembersManagePage from './components/MembersManagePage'
 import ManageBossTimerPage from './components/ManageBossTimerPage'
 import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
+import RelicCalculatorPage from './components/RelicCalculatorPage'
 import LoginPage from './components/LoginPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
@@ -81,6 +82,8 @@ function App() {
         return <ManageBossTimerPage userType={userType!} />
       case 'manage-boss-notifier':
         return <BossNotifierSettingsPage userType={userType!} />
+      case 'relic-calculator':
+        return <RelicCalculatorPage userType={userType!} />
       case 'boss-timer':
         return <ManageBossTimerPage userType={userType!} />
       default:
