@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Bell,
+  Calculator,
   Clock,
   Crown,
   LayoutDashboard,
@@ -31,14 +32,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
     { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} strokeWidth={1.75} /> },
   ];
 
-  const adminMenuItems = userType === 'admin'
+  const managementMenuItems = userType === 'admin'
     ? [
         { id: 'manage-boss-timer', label: 'Manage Boss Timer', icon: <Clock size={18} strokeWidth={1.75} /> },
         { id: 'manage-attendance', label: 'Manage Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
         { id: 'manage-members', label: 'Manage Members', icon: <Users size={18} strokeWidth={1.75} /> },
-        { id: 'manage-boss-notifier', label: 'Field Boss Notifier', icon: <Bell size={18} strokeWidth={1.75} /> },
       ]
     : [];
+
+  const toolsMenuItems = [
+    { id: 'relic-calculator', label: 'Relic Calculator', icon: <Calculator size={18} strokeWidth={1.75} /> },
+    ...(userType === 'admin'
+      ? [{ id: 'manage-boss-notifier', label: 'Field Boss Notifier', icon: <Bell size={18} strokeWidth={1.75} /> }]
+      : []),
+  ];
 
   return (
     <aside className="sidebar">
@@ -68,10 +75,26 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
               </button>
             </li>
           ))}
-          {adminMenuItems.length > 0 && (
+          {managementMenuItems.length > 0 && (
             <>
               <li className="nav-section">Management</li>
-              {adminMenuItems.map((item) => (
+              {managementMenuItems.map((item) => (
+                <li key={item.id} className="nav-item">
+                  <button
+                    className={`nav-link ${activePage === item.id ? 'active' : ''}`}
+                    onClick={() => onNavigate(item.id)}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-label">{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </>
+          )}
+          {toolsMenuItems.length > 0 && (
+            <>
+              <li className="nav-section">Tools</li>
+              {toolsMenuItems.map((item) => (
                 <li key={item.id} className="nav-item">
                   <button
                     className={`nav-link ${activePage === item.id ? 'active' : ''}`}
