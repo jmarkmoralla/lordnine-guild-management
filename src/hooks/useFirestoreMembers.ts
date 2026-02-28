@@ -17,6 +17,7 @@ interface MemberRanking {
   id?: string;
   rank: number;
   name: string;
+  walletAddress: string;
   level: number;
   combatPower: number;
   status: 'active' | 'inactive';
@@ -64,6 +65,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
           memberData.push({
             id: doc.id,
             name: rawData.name || '',
+            walletAddress: typeof rawData.walletAddress === 'string' ? rawData.walletAddress : '',
             level: Number(rawData.level || 1),
             combatPower: Number(rawData.combatPower || 0),
             status: rawData.status === 'inactive' ? 'inactive' : 'active',
@@ -107,7 +109,16 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
 
   const addMember = async (member: Omit<MemberRanking, 'id' | 'rank'>) => {
     try {
-      await addDoc(collection(db, 'guildMembers'), member);
+      const memberPayload: Omit<MemberRanking, 'id' | 'rank'> = {
+        name: member.name,
+        walletAddress: member.walletAddress ?? '',
+        level: member.level,
+        combatPower: member.combatPower,
+        status: member.status,
+        memberType: member.memberType,
+      };
+
+      await addDoc(collection(db, 'guildMembers'), memberPayload);
       // Add guild activity log
       await addDoc(collection(db, 'guildActivities'), {
         playerName: member.name,
@@ -123,9 +134,18 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
   const updateMember = async (id: string, updates: Partial<MemberRanking>) => {
     try {
       const memberRef = doc(db, 'guildMembers', id);
-      const { rank, ...updatesWithoutRank } = updates;
+      const { rank, walletAddress, ...updatesWithoutRank } = updates;
       void rank;
-      await updateDoc(memberRef, updatesWithoutRank);
+
+      const updatePayload: Partial<Omit<MemberRanking, 'id' | 'rank'>> = {
+        ...updatesWithoutRank,
+      };
+
+      if (walletAddress !== undefined) {
+        updatePayload.walletAddress = walletAddress;
+      }
+
+      await updateDoc(memberRef, updatePayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update member');
       throw err;

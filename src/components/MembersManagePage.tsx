@@ -7,6 +7,7 @@ interface MemberRanking {
   id?: string;
   rank: number;
   name: string;
+  walletAddress: string;
   level: number;
   combatPower: number;
   status: 'active' | 'inactive';
@@ -23,6 +24,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copiedWalletMemberId, setCopiedWalletMemberId] = useState<string | null>(null);
   const [sortBy] = useState<'combatPower'>('combatPower');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -51,6 +53,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [newMember, setNewMember] = useState<MemberRanking>({
     rank: 1,
     name: '',
+    walletAddress: '',
     level: 1,
     combatPower: 0,
     status: 'active',
@@ -61,6 +64,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
     setNewMember({
       rank: 1,
       name: '',
+      walletAddress: '',
       level: 1,
       combatPower: 0,
       status: 'active',
@@ -88,6 +92,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       setSaving(true);
       await addMember({
         name: newMember.name,
+        walletAddress: newMember.walletAddress,
         level: newMember.level,
         combatPower: newMember.combatPower,
         status: newMember.status,
@@ -111,6 +116,20 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       console.error('Failed to delete member:', err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleWalletAddressClick = async (memberId: string, walletAddress: string) => {
+    if (!walletAddress.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopiedWalletMemberId(memberId);
+      window.setTimeout(() => {
+        setCopiedWalletMemberId((currentId) => (currentId === memberId ? null : currentId));
+      }, 1200);
+    } catch (err) {
+      console.error('Failed to copy wallet address:', err);
     }
   };
 
@@ -167,6 +186,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             <tr>
               <th className="col-rank">Rank</th>
               <th className="col-name">Name</th>
+              <th className="col-wallet">Wallet Address</th>
               <th className="col-level">Level</th>
               <th className="col-combat">Combat Power</th>
               <th className="col-status">Status</th>
@@ -184,6 +204,20 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                 </td>
                 <td className="col-name">
                   <span className="member-name">{member.name}</span>
+                </td>
+                <td className="col-wallet">
+                  {member.walletAddress ? (
+                    <button
+                      type="button"
+                      className="wallet-address-btn"
+                      onClick={() => handleWalletAddressClick(member.id || String(member.rank), member.walletAddress)}
+                      title="Click to copy wallet address"
+                    >
+                      {copiedWalletMemberId === (member.id || String(member.rank)) ? 'Copied!' : member.walletAddress}
+                    </button>
+                  ) : (
+                    <span className="wallet-address-empty">—</span>
+                  )}
                 </td>
                 <td className="col-level">{member.level}</td>
                 <td className="col-combat">
@@ -219,7 +253,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             ))}
             {filteredMembers.length === 0 && (
               <tr>
-                <td colSpan={7} className="attendance-empty-row">
+                <td colSpan={8} className="attendance-empty-row">
                   No members found.
                 </td>
               </tr>
@@ -244,6 +278,14 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   type="text"
                   value={newMember.name}
                   onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Wallet Address</label>
+                <input
+                  type="text"
+                  value={newMember.walletAddress}
+                  onChange={(e) => setNewMember({ ...newMember, walletAddress: e.target.value })}
                 />
               </div>
               <div className="form-group">
@@ -310,6 +352,14 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   type="text"
                   value={editingMember.name}
                   onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Wallet Address</label>
+                <input
+                  type="text"
+                  value={editingMember.walletAddress}
+                  onChange={(e) => setEditingMember({ ...editingMember, walletAddress: e.target.value })}
                 />
               </div>
               <div className="form-group">
