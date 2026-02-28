@@ -195,8 +195,13 @@
 
 .col-name {
   flex: 1;
-  min-width: 180px;
-  max-width: 250px;
+  min-width: 130px;
+  max-width: 170px;
+}
+
+.col-wallet {
+  min-width: 320px;
+  text-align: left;
 }
 
 .col-level {
@@ -305,6 +310,34 @@ th.col-status {
   color: var(--text-primary);
   font-size: 0.95rem;
   transition: color 0.3s ease;
+}
+
+.wallet-address-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: left;
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-all;
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wallet-address-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+  background: rgba(74, 144, 226, 0.08);
+}
+
+.wallet-address-empty {
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 .member-level {
