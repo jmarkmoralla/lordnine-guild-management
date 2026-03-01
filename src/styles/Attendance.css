@@ -676,19 +676,31 @@
 
 .details-col-boss,
 .details-cell-boss {
-  width: 220px;
+  width: 180px;
   text-align: left;
+}
+
+.details-col-pts,
+.details-cell-pts {
+  width: 80px;
+  text-align: center;
+}
+
+.details-col-multiplier,
+.details-cell-multiplier {
+  width: 110px;
+  text-align: center;
 }
 
 .details-col-date,
 .details-cell-date {
-  width: 180px;
+  width: 160px;
   text-align: left;
 }
 
 .details-col-status,
 .details-cell-status {
-  width: 160px;
+  width: 140px;
   text-align: center;
 }
 
@@ -700,7 +712,9 @@
 
 .details-cell-type,
 .details-cell-boss,
-.details-cell-date {
+.details-cell-date,
+.details-cell-pts,
+.details-cell-multiplier {
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
@@ -756,6 +770,13 @@
 .attendance-details-modal .attendance-details-table th.details-col-date,
 .attendance-details-modal .attendance-details-table td.details-cell-date {
   text-align: left;
+}
+
+.attendance-details-modal .attendance-details-table th.details-col-pts,
+.attendance-details-modal .attendance-details-table td.details-cell-pts,
+.attendance-details-modal .attendance-details-table th.details-col-multiplier,
+.attendance-details-modal .attendance-details-table td.details-cell-multiplier {
+  text-align: center;
 }
 
 .attendance-details-modal .attendance-details-table th.details-col-status,

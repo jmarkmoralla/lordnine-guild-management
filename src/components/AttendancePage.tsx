@@ -47,6 +47,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     bossName: string;
     attendanceDate: string;
     status: AttendanceStatus;
+    multiplier: number;
   }>>([]);
   const [isLoadingMemberDetails, setIsLoadingMemberDetails] = useState(false);
   const [memberDetailsError, setMemberDetailsError] = useState<string | null>(null);
@@ -373,16 +374,35 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const monthAbbreviations = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
   const currentDateLabel = `${monthAbbreviations[Math.max(0, Math.min(11, Number(month) - 1))]} ${Number(day)}`;
   const summaryRowsComputed = useMemo(() => {
+    const memberMultiplierByName = new Map(
+      members.map((member) => {
+        const normalizedName = member.name.trim().toLowerCase();
+        const combatPower = Number(member.combatPower || 0);
+
+        const computedMultiplier = combatPower >= 100000
+          ? 2.5
+          : combatPower >= 90000
+            ? 2.0
+            : combatPower >= 80000
+              ? 1.5
+              : 1.0;
+
+        return [normalizedName, computedMultiplier] as const;
+      })
+    );
+
     const rowsWithMemberTotals = summaryRows.map((row) => {
       const computedTotalAttendance =
         Number(row.kransia || 0)
         + Number(row.fieldBoss || 0)
         + Number(row.guildBoss || 0)
         + Number(row.guildvsguild || 0);
+      const computedMultiplier = memberMultiplierByName.get(row.name.trim().toLowerCase()) ?? 1.0;
 
       return {
         ...row,
         computedTotalAttendance,
+        computedMultiplier,
       };
     });
 
@@ -409,7 +429,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         if (attendanceDifference !== 0) return attendanceDifference;
         return first.name.localeCompare(second.name);
       });
-  }, [summaryRows, attendancePercentage]);
+  }, [summaryRows, attendancePercentage, members]);
 
   const totalAttendanceAsOfCurrentDate = useMemo(
     () => summaryRowsComputed.reduce((sum, row) => sum + row.computedTotalAttendance, 0),
@@ -482,6 +502,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             bossName?: string;
             attendanceDate?: string;
             status?: string;
+            multiplier?: number;
           };
 
           const status: AttendanceStatus =
@@ -497,6 +518,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             bossName: data.bossName || '-',
             attendanceDate: data.attendanceDate || '',
             status,
+            multiplier: Number(data.multiplier ?? 1),
           };
         })
         .sort((first, second) => {
@@ -811,6 +833,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Total Pts</th>
                 <th>%</th>
                 <th>USDT Share</th>
+                <th>Multiplier</th>
                 <th className="summary-action-col">View</th>
               </tr>
             </thead>
@@ -825,6 +848,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <td className="member-date">{row.computedTotalAttendance}</td>
                   <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
                   <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
                   <td className="summary-action-cell">
                     <div className="summary-action-buttons">
                       <button
@@ -841,7 +865,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && manageSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="attendance-empty-row">
+                  <td colSpan={10} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -852,6 +876,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <tr>
                   <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -876,6 +901,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Total Pts</th>
                 <th>%</th>
                 <th>USDT Share</th>
+                <th>Multiplier</th>
                 <th className="summary-action-col">View</th>
               </tr>
             </thead>
@@ -890,6 +916,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <td className="member-date">{row.computedTotalAttendance}</td>
                   <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
                   <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
                   <td className="summary-action-cell">
                     <div className="summary-action-buttons">
                       <button
@@ -906,7 +933,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && guestSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="attendance-empty-row">
+                  <td colSpan={10} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -917,6 +944,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <tr>
                   <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -1129,6 +1157,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                       <th className="details-col-number">No.</th>
                       <th className="details-col-type">Type</th>
                       <th className="details-col-boss">Boss</th>
+                      <th className="details-col-pts">PTS</th>
+                      <th className="details-col-multiplier">Multiplier</th>
                       <th className="details-col-date">Date</th>
                       <th className="details-col-status">Status</th>
                       {canManage && <th className="details-col-action">Action</th>}
@@ -1140,6 +1170,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         <td className="details-cell-number">{index + 1}</td>
                         <td className="details-cell-type">{attendance.attendanceType}</td>
                         <td className="details-cell-boss">{attendance.bossName}</td>
+                        <td className="details-cell-pts">{getBaseAttendancePoints(attendance.attendanceType)}</td>
+                        <td className="details-cell-multiplier">{Number(attendance.multiplier || 1).toFixed(1)}</td>
                         <td className="details-cell-date">{formatAttendanceDateOnly(attendance.attendanceDate)}</td>
                         <td className="details-cell-status">{getStatusBadge(attendance.status)}</td>
                         {canManage && (
@@ -1166,7 +1198,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                     ))}
                     {memberAttendanceDetails.length === 0 && (
                       <tr>
-                        <td colSpan={canManage ? 6 : 5} className="attendance-empty-row">
+                        <td colSpan={canManage ? 8 : 7} className="attendance-empty-row">
                           No attendance records found for this member.
                         </td>
                       </tr>
