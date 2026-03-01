@@ -19,7 +19,10 @@ interface UseFirestoreAttendanceSummaryReturn {
   loading: boolean;
   error: string | null;
   updateSummaryRow: (rowId: string, values: SummaryEditableFields) => Promise<void>;
-  syncPresentMembersToSummary: (attendanceType: string, memberNames: string[]) => Promise<void>;
+  syncPresentMembersToSummary: (
+    attendanceType: string,
+    presentMembers: Array<{ name: string; multiplier: number }>
+  ) => Promise<void>;
   refreshSummaryForMember: (memberName: string) => Promise<void>;
 }
 
@@ -125,14 +128,23 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     });
   };
 
-  const syncPresentMembersToSummary = async (attendanceType: string, memberNames: string[]) => {
+  const syncPresentMembersToSummary = async (
+    attendanceType: string,
+    presentMembers: Array<{ name: string; multiplier: number }>
+  ) => {
     const targetField = getSummaryFieldByAttendanceType(attendanceType);
     const existingByName = new Map(summaryRows.map((row) => [row.name.trim().toLowerCase(), row]));
     const batch = writeBatch(db);
 
-    memberNames.forEach((memberName) => {
+    presentMembers.forEach(({ name: memberName, multiplier }) => {
       const normalizedName = memberName.trim().toLowerCase();
       if (!normalizedName) return;
+
+      const normalizedMultiplier = Number(multiplier);
+      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
+        ? normalizedMultiplier
+        : 1;
+      const attendancePoints = ATTENDANCE_POINTS[targetField] * effectiveMultiplier;
 
       const existing = existingByName.get(normalizedName);
 
@@ -144,7 +156,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
           guildvsguild: existing.guildvsguild,
         };
 
-        nextValues[targetField] += ATTENDANCE_POINTS[targetField];
+        nextValues[targetField] += attendancePoints;
         const nextTotalAttendance = computeTotalPoints(nextValues);
 
         batch.set(
@@ -167,7 +179,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         guildBoss: 0,
         guildvsguild: 0,
       };
-      initialValues[targetField] = ATTENDANCE_POINTS[targetField];
+      initialValues[targetField] = attendancePoints;
 
       batch.set(
         doc(db, 'guildAttendanceSummary', sanitizeSummaryDocId(memberName)),
@@ -206,9 +218,13 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     };
 
     attendanceSnapshot.docs.forEach((attendanceDoc) => {
-      const data = attendanceDoc.data() as { attendanceType?: string };
+      const data = attendanceDoc.data() as { attendanceType?: string; multiplier?: number };
       const targetField = getSummaryFieldByAttendanceType(data.attendanceType || '');
-      nextValues[targetField] += ATTENDANCE_POINTS[targetField];
+      const normalizedMultiplier = Number(data.multiplier ?? 1);
+      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
+        ? normalizedMultiplier
+        : 1;
+      nextValues[targetField] += ATTENDANCE_POINTS[targetField] * effectiveMultiplier;
     });
 
     const totalAttendance = computeTotalPoints(nextValues);

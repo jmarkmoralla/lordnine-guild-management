@@ -309,12 +309,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     const membersToPersist = members.filter((member): member is typeof member & { id: string } => Boolean(member.id));
 
-    const presentMemberNames = membersToPersist
+    const presentMembersForSummary = membersToPersist
       .filter((member) => draftAttendanceByMemberId[member.id] === 'present')
-      .map((member) => member.name)
-      .filter(Boolean);
+      .map((member) => ({
+        name: member.name,
+        multiplier: getCombatPowerMultiplier(Number(member.combatPower || 0)),
+      }))
+      .filter((member) => Boolean(member.name));
 
-    if (presentMemberNames.length === 0) {
+    if (presentMembersForSummary.length === 0) {
       setCreateAttendanceError('Select atleast 1 member before creating attendance.');
       return;
     }
@@ -329,13 +332,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           const draftStatus = draftAttendanceByMemberId[member.id] || 'unmarked';
 
           if (draftStatus === 'present') {
-            await upsertAttendance(member.id, member.name, 'present');
+            const multiplier = getCombatPowerMultiplier(Number(member.combatPower || 0));
+            await upsertAttendance(member.id, member.name, 'present', multiplier);
           }
         })
       );
 
-      if (presentMemberNames.length > 0) {
-        await syncPresentMembersToSummary(attendanceType, presentMemberNames);
+      if (presentMembersForSummary.length > 0) {
+        await syncPresentMembersToSummary(attendanceType, presentMembersForSummary);
       }
 
       setIsCreateAttendanceOpen(false);
@@ -529,6 +533,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return datePart || '-';
   };
 
+  const getCombatPowerMultiplier = (combatPower: number): number => {
+    if (combatPower >= 100000) return 2.5;
+    if (combatPower >= 90000) return 2.0;
+    if (combatPower >= 80000) return 1.5;
+    return 1.0;
+  };
+
+  const getBaseAttendancePoints = (selectedAttendanceType: string): number => {
+    if (selectedAttendanceType === 'Kransia') return 10;
+    if (selectedAttendanceType === 'Guild Boss') return 2;
+    return 1;
+  };
+
   const deleteAttendanceDetail = async (attendance: {
     id: string;
     attendanceType: string;
@@ -569,8 +586,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           <tr>
             <th>No.</th>
             <th>Name</th>
-            <th>Type</th>
-            <th>Boss</th>
+            <th className="col-combat-power">Combat Power</th>
+            <th className="col-pts">PTS</th>
+            <th className="col-multiplier">Multiplier</th>
             <th>Date</th>
             <th className="col-status">Status</th>
             {canManage && <th className="col-action">Action</th>}
@@ -583,8 +601,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 {canManage && isCreateAttendanceOpen ? index + 1 : member.rank}
               </td>
               <td className="member-name">{member.name}</td>
-              <td className="member-date">{attendanceType}</td>
-              <td className="member-date">{bossName}</td>
+              <td className="member-date member-combat-power">{Number(member.combatPower || 0).toLocaleString()}</td>
+              <td className="member-date member-pts">{getBaseAttendancePoints(attendanceType)}</td>
+              <td className="member-date member-multiplier">{getCombatPowerMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
               <td className="member-date">{selectedDate}</td>
               <td className="member-status">
                 {getStatusBadge(member.attendanceStatus)}
@@ -611,7 +630,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           ))}
           {!loading && membersWithAttendance.length === 0 && (
             <tr>
-              <td colSpan={canManage ? 7 : 6} className="attendance-empty-row">
+              <td colSpan={canManage ? 8 : 7} className="attendance-empty-row">
                 No members found for the selected filter.
               </td>
             </tr>
@@ -789,8 +808,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
-                <th>Total Points</th>
-                <th>Percentage</th>
+                <th>Total Pts</th>
+                <th>%</th>
                 <th>USDT Share</th>
                 <th className="summary-action-col">View</th>
               </tr>
@@ -854,8 +873,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
-                <th>Total Points</th>
-                <th>Percentage</th>
+                <th>Total Pts</th>
+                <th>%</th>
                 <th>USDT Share</th>
                 <th className="summary-action-col">View</th>
               </tr>

@@ -50,6 +50,13 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
     }
   };
 
+  const getCombatPowerMultiplier = (combatPower: number): number => {
+    if (combatPower >= 100000) return 2.5;
+    if (combatPower >= 90000) return 2.0;
+    if (combatPower >= 80000) return 1.5;
+    return 1.0;
+  };
+
   const [newMember, setNewMember] = useState<MemberRanking>({
     rank: 1,
     name: '',
@@ -189,8 +196,9 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
               <th className="col-wallet">Wallet Address</th>
               <th className="col-level">Level</th>
               <th className="col-combat">Combat Power</th>
+              <th className="col-multiplier">Multiplier</th>
               <th className="col-status">Status</th>
-              <th className="col-type">Member Type</th>
+              <th className="col-type">Type</th>
               <th className="col-actions">Actions</th>
             </tr>
           </thead>
@@ -223,6 +231,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                 <td className="col-combat">
                   <span className="combat-power">{member.combatPower.toLocaleString()}</span>
                 </td>
+                <td className="col-multiplier">{getCombatPowerMultiplier(member.combatPower).toFixed(1)}</td>
                 <td className="col-status">
                   <span className={`status-badge status-${member.status}`}>
                     {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
@@ -253,7 +262,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             ))}
             {filteredMembers.length === 0 && (
               <tr>
-                <td colSpan={8} className="attendance-empty-row">
+                <td colSpan={9} className="attendance-empty-row">
                   No members found.
                 </td>
               </tr>
