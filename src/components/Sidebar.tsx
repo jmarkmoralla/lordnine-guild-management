@@ -9,7 +9,6 @@ import {
   LogOut,
   Moon,
   Sun,
-  Trophy,
   User,
   Users,
 } from 'lucide-react';
@@ -29,7 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
-    { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} strokeWidth={1.75} /> },
+    { id: 'rankings', label: 'Members', icon: <Users size={18} strokeWidth={1.75} /> },
   ];
 
   const managementMenuItems = userType === 'admin'

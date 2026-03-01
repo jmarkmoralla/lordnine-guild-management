@@ -23,13 +23,14 @@ export interface AttendanceRecord {
   bossName: string;
   attendanceDate: string;
   status: AttendanceStatus;
+  multiplier: number;
 }
 
 interface UseFirestoreAttendanceReturn {
   records: AttendanceRecord[];
   loading: boolean;
   error: string | null;
-  upsertAttendance: (memberId: string, memberName: string, status: AttendanceStatus) => Promise<void>;
+  upsertAttendance: (memberId: string, memberName: string, status: AttendanceStatus, multiplier?: number) => Promise<void>;
   clearAttendance: (memberId: string) => Promise<void>;
 }
 
@@ -89,6 +90,7 @@ export const useFirestoreAttendance = (
               bossName?: string;
               attendanceDate?: string;
               status?: string;
+              multiplier?: number;
             };
 
             const memberId = attendanceDoc.id.split('|')[1] || '';
@@ -101,6 +103,7 @@ export const useFirestoreAttendance = (
               bossName: data.bossName || '',
               attendanceDate: data.attendanceDate || '',
               status: fromFirestoreStatus(data.status),
+              multiplier: Number(data.multiplier ?? 1),
             };
           })
           .filter((record) => record.attendanceType === attendanceType && record.bossName === bossName);
@@ -119,7 +122,7 @@ export const useFirestoreAttendance = (
     return () => unsubscribe();
   }, [date, attendanceType, bossName]);
 
-  const upsertAttendance = async (memberId: string, memberName: string, status: AttendanceStatus) => {
+  const upsertAttendance = async (memberId: string, memberName: string, status: AttendanceStatus, multiplier = 1) => {
     const attendanceDateTime = buildAttendanceDateTime(date);
     const attendanceDocId = buildAttendanceDocId(attendanceDateTime, memberId, attendanceType, bossName);
     await setDoc(
@@ -131,6 +134,7 @@ export const useFirestoreAttendance = (
         bossName,
         attendanceDate: attendanceDateTime,
         status: toFirestoreStatus(status),
+        multiplier: Number(multiplier) || 1,
       },
       { merge: true }
     );

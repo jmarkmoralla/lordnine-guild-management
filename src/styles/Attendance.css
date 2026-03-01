@@ -622,6 +622,30 @@
   padding-right: 0.45rem;
 }
 
+.attendance-modal-content .attendance-table {
+  table-layout: auto;
+}
+
+.attendance-modal-content .attendance-table th,
+.attendance-modal-content .attendance-table td {
+  width: auto;
+  white-space: nowrap;
+}
+
+.attendance-modal-content .attendance-table th:first-child,
+.attendance-modal-content .attendance-table td:first-child {
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.attendance-modal-content .attendance-table th.col-pts,
+.attendance-modal-content .attendance-table td.member-pts,
+.attendance-modal-content .attendance-table th.col-multiplier,
+.attendance-modal-content .attendance-table td.member-multiplier {
+  text-align: center;
+}
+
 .attendance-modal-content .attendance-table td.member-action .status-actions {
   justify-content: center;
 }
