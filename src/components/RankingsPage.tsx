@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Award, Loader } from 'lucide-react';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
+import { getMemberClassIconPath } from '../utils/memberClass';
 
 const RankingsPage: React.FC = () => {
   const { members, loading, error } = useFirestoreMembers();
@@ -116,6 +117,7 @@ const RankingsPage: React.FC = () => {
               <th className="col-rank">Rank</th>
               <th className="col-name">Name</th>
               <th className="col-wallet">Wallet Address</th>
+              <th className="col-class">Class</th>
               <th className="col-level">Level</th>
               <th className="col-combat">Combat Power</th>
               <th className="col-multiplier">Multiplier</th>
@@ -147,6 +149,16 @@ const RankingsPage: React.FC = () => {
                   ) : (
                     <span className="wallet-address-empty">—</span>
                   )}
+                </td>
+                <td className="col-class">
+                  <span className="member-class">
+                    <img
+                      src={getMemberClassIconPath(member.playerClass)}
+                      alt={member.playerClass}
+                      className="member-class-icon"
+                      loading="lazy"
+                    />
+                  </span>
                 </td>
                 <td className="col-level">
                   <span className="member-level">{member.level}</span>

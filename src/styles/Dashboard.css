@@ -563,58 +563,6 @@
   text-overflow: ellipsis;
 }
 
-/* Recent Activity */
-.recent-activity {
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px var(--shadow-light);
-  transition: all 0.3s ease;
-}
-
-.recent-activity h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 1.25rem;
-  transition: color 0.3s ease;
-}
-
-.activity-list {
-  list-style: none;
-}
-
-.activity-item {
-  padding: 0.85rem;
-  border-left: 3px solid var(--accent-blue);
-  margin-bottom: 0.6rem;
-  display: flex;
-  gap: 0.8rem;
-  align-items: center;
-  background-color: var(--bg-tertiary);
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.activity-item:hover {
-  background-color: var(--accent-blue);
-  background-color: rgba(74, 144, 226, 0.1);
-  border-left-color: var(--accent-dark);
-}
-
-.activity-user {
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 120px;
-  transition: color 0.3s ease;
-}
-
-.activity-action {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  transition: color 0.3s ease;
-}
-
 /* Loading and Error States */
 .loading-state {
   padding: 1.5rem;
@@ -672,11 +620,6 @@
 
   .boss-grid {
     grid-template-columns: 1fr;
-  }
-
-  .activity-item {
-    flex-direction: column;
-    text-align: center;
   }
 
   .dashboard-page .boss-name {
@@ -755,8 +698,7 @@
   font-size: 1.48rem;
 }
 
-.dashboard-page .boss-timers,
-.dashboard-page .recent-activity {
+.dashboard-page .boss-timers {
   border: 1px solid var(--border-light);
   border-radius: 14px;
   box-shadow: 0 4px 14px var(--shadow-light);
@@ -873,17 +815,3 @@
   color: var(--text-secondary);
 }
 
-.dashboard-page .activity-item {
-  border-radius: 8px;
-  border-left-width: 2px;
-  padding: 0.78rem 0.82rem;
-  box-shadow: 0 1px 4px var(--shadow-light);
-}
-
-.dashboard-page .activity-item:hover {
-  transform: translateX(2px);
-}
-
-.dashboard-page .activity-user {
-  min-width: 128px;
-}

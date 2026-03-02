@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Crown, Trophy, Users, Loader, Clock3 } from 'lucide-react';
 import '../styles/Dashboard.css';
-import { useFirestoreActivities } from '../hooks/useFirestoreActivities';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
@@ -218,7 +217,6 @@ const getBossDetailStatus = (boss: BossInfo) => {
 };
 
 const DashboardPage: React.FC = () => {
-  const { activities, loading, error } = useFirestoreActivities();
   const { members } = useFirestoreMembers();
   const { guildInfo, loading: guildLoading } = useFirestoreGuildInfo();
   const { bosses, loading: bossLoading } = useFirestoreBossInfo();
@@ -228,7 +226,6 @@ const DashboardPage: React.FC = () => {
   const [tooltipPlacement, setTooltipPlacement] = useState<'top' | 'bottom'>('bottom');
   
   const guildMaster = members.find((member) => member.memberType === 'guild master');
-  const recentActivities = activities.slice(0, 5);
   const aliveBosses = bosses
     .filter((boss) => getDisplayBossStatus(boss) === 'alive')
     .slice()
@@ -538,35 +535,6 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      <div className="recent-activity">
-        <h3>Recent Activities</h3>
-        {loading && (
-          <div className="loading-state">
-            <p>Loading activities... <Loader size={16} strokeWidth={1.8} /></p>
-          </div>
-        )}
-        {error && (
-          <div className="error-state">
-            <p>Error: {error}</p>
-          </div>
-        )}
-        {!loading && recentActivities.length === 0 && (
-          <div className="empty-state">
-            <p>No recent activities</p>
-          </div>
-        )}
-        {!loading && recentActivities.length > 0 && (
-          <ul className="activity-list">
-            {recentActivities.map((activity) => (
-              <li key={activity.id} className="activity-item">
-                <span className="activity-user">{activity.playerName}</span>
-                <span className="activity-action">{activity.action}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   );
 };
