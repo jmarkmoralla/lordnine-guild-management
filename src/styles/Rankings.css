@@ -204,6 +204,16 @@
   text-align: left;
 }
 
+.col-class {
+  min-width: 180px;
+  text-align: center;
+}
+
+th.col-class,
+td.col-class {
+  text-align: center;
+}
+
 .col-level {
   width: 70px;
   text-align: center;
@@ -851,6 +861,20 @@ td.col-type {
   text-align: center;
 }
 
+.member-class {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.member-class-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .col-level,
 .col-status,
 .col-type {
@@ -877,7 +901,8 @@ td.col-type {
 
   .col-level,
   .col-status,
-  .col-type {
+  .col-type,
+  .col-class {
     width: 100px;
     font-size: 0.85rem;
   }

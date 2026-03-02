@@ -8,16 +8,17 @@ import {
   deleteField,
   onSnapshot,
   query,
-  getDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { DEFAULT_MEMBER_CLASS, isMemberClass, type MemberClass } from '../utils/memberClass';
 
 interface MemberRanking {
   id?: string;
   rank: number;
   name: string;
   walletAddress: string;
+  playerClass: MemberClass;
   level: number;
   combatPower: number;
   status: 'active' | 'inactive';
@@ -66,6 +67,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
             id: doc.id,
             name: rawData.name || '',
             walletAddress: typeof rawData.walletAddress === 'string' ? rawData.walletAddress : '',
+            playerClass: isMemberClass(rawData.playerClass) ? rawData.playerClass : DEFAULT_MEMBER_CLASS,
             level: Number(rawData.level || 1),
             combatPower: Number(rawData.combatPower || 0),
             status: rawData.status === 'inactive' ? 'inactive' : 'active',
@@ -112,6 +114,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
       const memberPayload: Omit<MemberRanking, 'id' | 'rank'> = {
         name: member.name,
         walletAddress: member.walletAddress ?? '',
+        playerClass: isMemberClass(member.playerClass) ? member.playerClass : DEFAULT_MEMBER_CLASS,
         level: member.level,
         combatPower: member.combatPower,
         status: member.status,
@@ -119,12 +122,6 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
       };
 
       await addDoc(collection(db, 'guildMembers'), memberPayload);
-      // Add guild activity log
-      await addDoc(collection(db, 'guildActivities'), {
-        playerName: member.name,
-        action: 'joined the guild',
-        timestamp: Date.now(),
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add member');
       throw err;
@@ -134,7 +131,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
   const updateMember = async (id: string, updates: Partial<MemberRanking>) => {
     try {
       const memberRef = doc(db, 'guildMembers', id);
-      const { rank, walletAddress, ...updatesWithoutRank } = updates;
+      const { rank, walletAddress, playerClass, ...updatesWithoutRank } = updates;
       void rank;
 
       const updatePayload: Partial<Omit<MemberRanking, 'id' | 'rank'>> = {
@@ -143,6 +140,10 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
 
       if (walletAddress !== undefined) {
         updatePayload.walletAddress = walletAddress;
+      }
+
+      if (playerClass !== undefined) {
+        updatePayload.playerClass = playerClass;
       }
 
       await updateDoc(memberRef, updatePayload);
@@ -154,21 +155,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
 
   const deleteMember = async (id: string) => {
     try {
-      // Get member data first to get the player name
-      const memberDoc = await getDoc(doc(db, 'guildMembers', id));
-      const memberData = memberDoc.data() as MemberRanking | undefined;
-      
-      // Delete the member
       await deleteDoc(doc(db, 'guildMembers', id));
-      
-      // Add guild activity log
-      if (memberData?.name) {
-        await addDoc(collection(db, 'guildActivities'), {
-          playerName: memberData.name,
-          action: 'has been kicked from the guild',
-          timestamp: Date.now(),
-        });
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete member');
       throw err;

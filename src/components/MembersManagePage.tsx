@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Award, Loader, Pencil, Plus, Trash2, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
+import { DEFAULT_MEMBER_CLASS, MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
 
 interface MemberRanking {
   id?: string;
   rank: number;
   name: string;
   walletAddress: string;
+  playerClass: MemberClass;
   level: number;
   combatPower: number;
   status: 'active' | 'inactive';
@@ -61,6 +63,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
     rank: 1,
     name: '',
     walletAddress: '',
+    playerClass: DEFAULT_MEMBER_CLASS,
     level: 1,
     combatPower: 0,
     status: 'active',
@@ -72,6 +75,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       rank: 1,
       name: '',
       walletAddress: '',
+      playerClass: DEFAULT_MEMBER_CLASS,
       level: 1,
       combatPower: 0,
       status: 'active',
@@ -100,6 +104,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       await addMember({
         name: newMember.name,
         walletAddress: newMember.walletAddress,
+        playerClass: newMember.playerClass,
         level: newMember.level,
         combatPower: newMember.combatPower,
         status: newMember.status,
@@ -194,6 +199,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
               <th className="col-rank">Rank</th>
               <th className="col-name">Name</th>
               <th className="col-wallet">Wallet Address</th>
+              <th className="col-class">Class</th>
               <th className="col-level">Level</th>
               <th className="col-combat">Combat Power</th>
               <th className="col-multiplier">Multiplier</th>
@@ -226,6 +232,16 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   ) : (
                     <span className="wallet-address-empty">—</span>
                   )}
+                </td>
+                <td className="col-class">
+                  <span className="member-class">
+                    <img
+                      src={getMemberClassIconPath(member.playerClass)}
+                      alt={member.playerClass}
+                      className="member-class-icon"
+                      loading="lazy"
+                    />
+                  </span>
                 </td>
                 <td className="col-level">{member.level}</td>
                 <td className="col-combat">
@@ -262,7 +278,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             ))}
             {filteredMembers.length === 0 && (
               <tr>
-                <td colSpan={9} className="attendance-empty-row">
+                <td colSpan={10} className="attendance-empty-row">
                   No members found.
                 </td>
               </tr>
@@ -296,6 +312,17 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   value={newMember.walletAddress}
                   onChange={(e) => setNewMember({ ...newMember, walletAddress: e.target.value })}
                 />
+              </div>
+              <div className="form-group">
+                <label>Class</label>
+                <select
+                  value={newMember.playerClass}
+                  onChange={(e) => setNewMember({ ...newMember, playerClass: e.target.value as MemberClass })}
+                >
+                  {MEMBER_CLASSES.map((memberClass) => (
+                    <option key={memberClass} value={memberClass}>{memberClass}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Level</label>
@@ -370,6 +397,17 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   value={editingMember.walletAddress}
                   onChange={(e) => setEditingMember({ ...editingMember, walletAddress: e.target.value })}
                 />
+              </div>
+              <div className="form-group">
+                <label>Class</label>
+                <select
+                  value={editingMember.playerClass}
+                  onChange={(e) => setEditingMember({ ...editingMember, playerClass: e.target.value as MemberClass })}
+                >
+                  {MEMBER_CLASSES.map((memberClass) => (
+                    <option key={memberClass} value={memberClass}>{memberClass}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Level</label>
