@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -24,13 +24,5 @@ export const db = getFirestore(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
-
-// Enable anonymous sign-in for Firestore default access
-signInAnonymously(auth).catch((error) => {
-  // Silently fail - will sign in properly on first load
-  if (error.code !== 'auth/operation-not-allowed') {
-    console.error('Anonymous auth failed:', error);
-  }
-});
 
 export default app;
