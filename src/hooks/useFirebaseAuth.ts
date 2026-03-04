@@ -1,13 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  signInAnonymously,
   onAuthStateChanged,
 } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
+
+const INSUFFICIENT_ROLE_CODE = 'auth/insufficient-role';
 
 interface AuthState {
   user: User | null;
@@ -17,7 +18,6 @@ interface AuthState {
 }
 
 interface AuthContextReturn extends AuthState {
-  signUpAdmin: (email: string, password: string) => Promise<void>;
   loginAdmin: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -29,53 +29,42 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     error: null,
     isAdmin: false,
   });
-  const autoGuestAttemptedRef = useRef(false);
-
   // Listen to auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const isAdmin = user ? await hasAdminRole(user) : false;
+      if (!isMounted) return;
+
       setAuthState({
         user,
         loading: false,
         error: null,
-        isAdmin: user ? !user.isAnonymous : false, // Admin = authenticated user (not anonymous)
+        isAdmin,
       });
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
-
-  // Auto sign-in as anonymous for read-only guest access
-  useEffect(() => {
-    if (!authState.loading && !authState.user && !autoGuestAttemptedRef.current) {
-      autoGuestAttemptedRef.current = true;
-      signInAnonymously(auth)
-        .catch((err) => {
-          const { code, message } = normalizeAuthError(err);
-          const errorMessage = `${getErrorMessage(code)} (${code})`;
-          console.error('Auto anonymous sign-in failed:', code, message, err);
-          console.warn(errorMessage);
-        });
-    }
-  }, [authState.loading, authState.user]);
-
-  const signUpAdmin = async (email: string, password: string): Promise<void> => {
-    try {
-      setAuthState((prev) => ({ ...prev, error: null, loading: true }));
-      await createUserWithEmailAndPassword(auth, email, password);
-      setAuthState((prev) => ({ ...prev, loading: false }));
-    } catch (err) {
-      const { code } = normalizeAuthError(err);
-      const errorMessage = getErrorMessage(code);
-      setAuthState((prev) => ({ ...prev, error: errorMessage, loading: false }));
-      throw new Error(errorMessage);
-    }
-  };
 
   const loginAdmin = async (email: string, password: string): Promise<void> => {
     try {
       setAuthState((prev) => ({ ...prev, error: null, loading: true }));
       await signInWithEmailAndPassword(auth, email, password);
+
+      const currentUser = auth.currentUser;
+      const isAdmin = currentUser ? await hasAdminRole(currentUser) : false;
+      if (!isAdmin) {
+        await signOut(auth);
+        const insufficientRoleError = new Error('This account does not have the admin role.') as Error & { code: string };
+        insufficientRoleError.code = INSUFFICIENT_ROLE_CODE;
+        throw insufficientRoleError;
+      }
+
       setAuthState((prev) => ({ ...prev, loading: false }));
     } catch (err) {
       const { code } = normalizeAuthError(err);
@@ -89,9 +78,6 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     try {
       setAuthState((prev) => ({ ...prev, error: null, loading: true }));
       await signOut(auth);
-      // Re-sign in as anonymous after logout
-      await signInAnonymously(auth);
-      autoGuestAttemptedRef.current = true;
       setAuthState((prev) => ({ ...prev, loading: false }));
     } catch (err) {
       const { code } = normalizeAuthError(err);
@@ -103,7 +89,6 @@ export const useFirebaseAuth = (): AuthContextReturn => {
 
   return {
     ...authState,
-    signUpAdmin,
     loginAdmin,
     logout,
   };
@@ -122,6 +107,7 @@ function getErrorMessage(code: string): string {
     'auth/too-many-requests': 'Too many login attempts. Please try again later.',
     'auth/operation-not-allowed': 'Authentication method is not enabled in Firebase.',
     'auth/admin-restricted-operation': 'This action is restricted. Create the user in Firebase Console or enable email/password sign-up.',
+    'auth/insufficient-role': 'This account does not have the admin role.',
   };
 
   return errors[code] || 'Authentication failed. Please try again.';
@@ -135,4 +121,18 @@ function normalizeAuthError(err: unknown): { code: string; message: string } {
   }
 
   return { code: 'auth/unknown', message: String(err) };
+}
+
+async function hasAdminRole(user: User): Promise<boolean> {
+  if (user.isAnonymous) {
+    return false;
+  }
+
+  try {
+    const adminDocRef = doc(db, 'admins', user.uid);
+    const adminDoc = await getDoc(adminDocRef);
+    return adminDoc.exists();
+  } catch {
+    return false;
+  }
 }

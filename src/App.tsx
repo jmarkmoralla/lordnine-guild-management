@@ -12,15 +12,10 @@ import RelicCalculatorPage from './components/RelicCalculatorPage'
 import LoginPage from './components/LoginPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
-import { createDefaultAdminUser } from './data/createDefaultAdmin'
-import { seedFirestoreDatabase } from './data/seedDatabase'
 import './App.css'
 
-const shouldBootstrapDefaultAdmin = import.meta.env.VITE_ENABLE_DEFAULT_ADMIN_BOOTSTRAP === 'true'
-const shouldSeedDatabase = import.meta.env.VITE_ENABLE_DB_SEED === 'true'
-
 function App() {
-  const { isAdmin, loading: authLoading, logout } = useFirebaseAuth()
+  const { isAdmin, logout } = useFirebaseAuth()
   const [activePage, setActivePage] = useState('dashboard')
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -41,21 +36,6 @@ function App() {
       document.documentElement.classList.remove('dark-mode')
     }
   }, [isDarkMode])
-
-  // Initialize Firestore database with sample data if empty
-  useEffect(() => {
-    if (!authLoading) {
-      if (shouldBootstrapDefaultAdmin) {
-        createDefaultAdminUser().catch((err) => console.error(err))
-      }
-
-      if (shouldSeedDatabase) {
-        seedFirestoreDatabase().catch((error) => {
-          console.error('Database initialization failed:', error)
-        })
-      }
-    }
-  }, [authLoading])
 
   const handleLogout = async () => {
     try {

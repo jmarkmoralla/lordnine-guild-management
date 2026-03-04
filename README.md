@@ -68,17 +68,16 @@ cp .env.example .env.local
 - `VITE_FIREBASE_APP_ID`
 - `VITE_FIREBASE_MEASUREMENT_ID`
 
-3. Keep bootstrap flags disabled for production unless explicitly needed:
-
-- `VITE_ENABLE_DEFAULT_ADMIN_BOOTSTRAP=false`
-- `VITE_ENABLE_DB_SEED=false`
-
-4. Validate before deploy:
+3. Validate before deploy:
 
 ```bash
 npm run lint
 npm run build
 ```
+
+4. Apply strict Firestore rules from [firestore.rules](firestore.rules) and deploy them with Firebase CLI.
+5. Ensure admin users have Firebase custom claim `role: "admin"` (set via Firebase Admin SDK), or write operations will be denied.
+6. After hardening, non-admin users are denied Firestore reads and writes by server rules.
 
 ## Technologies Used
 
