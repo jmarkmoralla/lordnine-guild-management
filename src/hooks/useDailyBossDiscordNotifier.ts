@@ -160,14 +160,14 @@ const sendDiscordWebhook = async (webhookUrl: string, content: string) => {
   }
 };
 
-const buildSimpleScheduleText = (bosses: BossInfo[], todayKey: string) => {
+const buildSimpleScheduleText = (bosses: BossInfo[]) => {
   const lines: string[] = [];
 
   BOSS_TYPE_ORDER.forEach((bossType) => {
     const groupedBosses = bosses.filter((boss) => boss.bossType === bossType);
     if (groupedBosses.length === 0) return;
 
-    lines.push(`**${bossType} Schedule (${todayKey})**`);
+    lines.push(`**${bossType} Schedule**`);
     lines.push('');
 
     groupedBosses.forEach((boss) => {
@@ -221,7 +221,7 @@ export const useDailyBossDiscordNotifier = ({ enabled }: UseDailyBossDiscordNoti
       return firstRespawn - secondRespawn;
     });
 
-    const content = buildSimpleScheduleText(sortedBosses, todayKey);
+    const content = buildSimpleScheduleText(sortedBosses);
 
     try {
       inFlightRef.current = true;
