@@ -6,7 +6,6 @@ import { BOSS_NOTIFIER_SETTINGS_DOC, useFirestoreBossNotifierSettings } from './
 import type { BossInfo } from './useFirestoreBossInfo';
 import { getNextRespawnDate } from '../utils/bossRespawn';
 import {
-  formatPhilippinesMonthDayTime12,
   getPhilippinesNowDate,
   getPhilippinesNowParts,
 } from '../utils/philippinesTime';
@@ -22,6 +21,43 @@ const SEND_LOCK_TTL_MS = 2 * 60 * 1000;
 const getTodayKey = () => {
   const { year, month, day } = getPhilippinesNowParts();
   return `${year}-${month}-${day}`;
+};
+
+const getPhilippinesDateKey = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-PH', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value ?? '1970';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '01';
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatPhilippinesMonthDayAndTime12 = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(date);
+
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '';
+  const dayPeriod = (parts.find((part) => part.type === 'dayPeriod')?.value ?? '').toUpperCase();
+
+  return {
+    monthDay: `${month}/${day}`,
+    time: `${hour}:${minute} ${dayPeriod}`.trim(),
+  };
 };
 
 const toMinutes = (time: string) => {
@@ -172,8 +208,13 @@ const buildSimpleScheduleText = (bosses: BossInfo[]) => {
 
     groupedBosses.forEach((boss) => {
       const respawn = getNextRespawnDate(boss);
-      const nextRespawn = respawn ? formatPhilippinesMonthDayTime12(respawn) : '-';
-      lines.push(`• **${boss.name}** — ${nextRespawn}`);
+      if (!respawn) {
+        lines.push(`• **${boss.name}** — -`);
+        return;
+      }
+
+      const { monthDay, time } = formatPhilippinesMonthDayAndTime12(respawn);
+      lines.push(`• **${boss.name}** — ${monthDay} - **${time}**`);
     });
 
     lines.push('');
@@ -215,13 +256,23 @@ export const useDailyBossDiscordNotifier = ({ enabled }: UseDailyBossDiscordNoti
     const reservationId = await reserveScheduleSend(scheduleKey);
     if (!reservationId) return;
 
-    const sortedBosses = [...selectedBosses].sort((first, second) => {
-      const firstRespawn = getNextRespawnDate(first)?.getTime() ?? Number.POSITIVE_INFINITY;
-      const secondRespawn = getNextRespawnDate(second)?.getTime() ?? Number.POSITIVE_INFINITY;
-      return firstRespawn - secondRespawn;
-    });
+    const todayScheduledBosses = selectedBosses
+      .map((boss) => ({
+        boss,
+        nextRespawn: getNextRespawnDate(boss),
+      }))
+      .filter((entry): entry is { boss: BossInfo; nextRespawn: Date } => {
+        if (!entry.nextRespawn) return false;
+        return getPhilippinesDateKey(entry.nextRespawn) === todayKey;
+      })
+      .sort((first, second) => first.nextRespawn.getTime() - second.nextRespawn.getTime())
+      .map(({ boss }) => boss);
 
-    const content = buildSimpleScheduleText(sortedBosses);
+    if (todayScheduledBosses.length === 0) {
+      return;
+    }
+
+    const content = buildSimpleScheduleText(todayScheduledBosses);
 
     try {
       inFlightRef.current = true;
