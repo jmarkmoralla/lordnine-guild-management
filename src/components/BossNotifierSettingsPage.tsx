@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader, Pencil, Save, Search, X } from 'lucide-react';
+import { Check, Loader, Pencil, Search, Send, X } from 'lucide-react';
 import '../styles/Dashboard.css';
 import '../styles/Rankings.css';
 import '../styles/BossNotifier.css';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreBossNotifierSettings } from '../hooks/useFirestoreBossNotifierSettings.ts';
+import { sendBossNotificationForDate } from '../hooks/useDailyBossDiscordNotifier';
 
 interface BossNotifierSettingsPageProps {
   userType: 'guest' | 'admin';
@@ -14,9 +15,8 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
   const { bosses, loading: bossesLoading, error: bossesError } = useFirestoreBossInfo();
   const { settings, loading: settingsLoading, error: settingsError, saveSettings } = useFirestoreBossNotifierSettings();
 
-  const [isEnabled, setIsEnabled] = useState(false);
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
-  const [notificationTime, setNotificationTime] = useState('09:00');
+  const [manualNotificationDate, setManualNotificationDate] = useState('');
   const [enabledBossIds, setEnabledBossIds] = useState<string[]>([]);
   const [bossSearchQuery, setBossSearchQuery] = useState('');
   const [isEditingNotifierDetails, setIsEditingNotifierDetails] = useState(false);
@@ -25,9 +25,8 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
   const isSaveError = saveMessage?.toLowerCase().includes('failed') ?? false;
 
   useEffect(() => {
-    setIsEnabled(settings.isEnabled);
     setDiscordWebhookUrl(settings.discordWebhookUrl);
-    setNotificationTime(settings.notificationTime);
+    setManualNotificationDate(settings.manualNotificationDate);
     setEnabledBossIds(settings.enabledBossIds);
     setIsEditingNotifierDetails(false);
   }, [settings]);
@@ -42,19 +41,6 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
     [bossSearchQuery, sortedBosses]
   );
 
-  const isDirty = useMemo(() => {
-    const selectedSet = new Set(enabledBossIds);
-    const originalSet = new Set(settings.enabledBossIds);
-    const sameSelection = selectedSet.size === originalSet.size && [...selectedSet].every((id) => originalSet.has(id));
-
-    return (
-      isEnabled !== settings.isEnabled
-      || discordWebhookUrl !== settings.discordWebhookUrl
-      || notificationTime !== settings.notificationTime
-      || !sameSelection
-    );
-  }, [discordWebhookUrl, enabledBossIds, isEnabled, notificationTime, settings]);
-
   const toggleBoss = (bossId: string) => {
     setEnabledBossIds((currentIds) => {
       if (currentIds.includes(bossId)) {
@@ -65,20 +51,52 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
     });
   };
 
-  const handleSave = async () => {
+  const handleSendNotification = async () => {
     try {
       setSaving(true);
       setSaveMessage(null);
+
+      const trimmedWebhookUrl = discordWebhookUrl.trim();
+      if (!trimmedWebhookUrl) {
+        setSaveMessage('Failed to send: Discord webhook URL is required.');
+        return;
+      }
+
+      if (!manualNotificationDate) {
+        setSaveMessage('Failed to send: Notification date is required.');
+        return;
+      }
+
+      const selectedBosses = bosses.filter((boss) => boss.id && enabledBossIds.includes(boss.id));
+      if (selectedBosses.length === 0) {
+        setSaveMessage('Failed to send: Select at least one boss.');
+        return;
+      }
+
       await saveSettings({
-        isEnabled,
-        discordWebhookUrl: discordWebhookUrl.trim(),
-        notificationTime,
+        isEnabled: true,
+        discordWebhookUrl: trimmedWebhookUrl,
+        scheduleMode: 'manual',
+        manualNotificationDate,
+        manualNotificationTime: '',
         enabledBossIds,
       });
-      setSaveMessage('Field boss notifier settings saved.');
+
+      const sentCount = await sendBossNotificationForDate({
+        webhookUrl: trimmedWebhookUrl,
+        bosses: selectedBosses,
+        dateKey: manualNotificationDate,
+      });
+
+      if (sentCount === 0) {
+        setSaveMessage('No selected bosses match the selected respawn date.');
+        return;
+      }
+
+      setSaveMessage(`Notification sent for ${sentCount} boss(es). Settings saved.`);
     } catch (error) {
-      console.error('Failed to save boss notifier settings:', error);
-      setSaveMessage('Failed to save settings. Please try again.');
+      console.error('Failed to send boss notifier notification:', error);
+      setSaveMessage('Failed to send notification. Please check the webhook URL and try again.');
     } finally {
       setSaving(false);
     }
@@ -102,7 +120,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
     <div className="page-container boss-notifier-page">
       <div className="page-header">
         <h2>Field Boss Discord Notifier</h2>
-        <p className="page-subtitle">Configure daily boss respawn notifications and select included bosses</p>
+        <p className="page-subtitle">Send selected boss schedules by respawn date</p>
       </div>
 
       {(bossesLoading || settingsLoading) && (
@@ -121,32 +139,20 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
         <div className="notifier-card-header">
           <div className="notifier-card-header-main">
             <h3>Notification Settings</h3>
-            <p>Manage Discord webhook and schedule</p>
+            <p>Lock fields by default to avoid accidental edits</p>
           </div>
-          <div className="notifier-card-toggle-wrap">
-            <button
-              type="button"
-              className={`notifier-edit-toggle ${isEditingNotifierDetails ? 'active' : ''}`}
-              onClick={() => setIsEditingNotifierDetails((current) => !current)}
-              aria-pressed={isEditingNotifierDetails}
-              aria-label={isEditingNotifierDetails ? 'Disable editing webhook and timer' : 'Enable editing webhook and timer'}
-              title={isEditingNotifierDetails ? 'Disable editing webhook and timer' : 'Enable editing webhook and timer'}
-            >
-              {isEditingNotifierDetails
-                ? <Check size={14} strokeWidth={2.2} />
-                : <Pencil size={14} strokeWidth={2} />}
-            </button>
-            <button
-              id="notifierEnabled"
-              type="button"
-              role="switch"
-              aria-checked={isEnabled}
-              className={`notifier-switch notifier-card-toggle ${isEnabled ? 'active' : ''}`}
-              onClick={() => setIsEnabled((current) => !current)}
-            >
-              <span className="notifier-switch-thumb" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`notifier-edit-toggle ${isEditingNotifierDetails ? 'active' : ''}`}
+            onClick={() => setIsEditingNotifierDetails((current) => !current)}
+            aria-pressed={isEditingNotifierDetails}
+            aria-label={isEditingNotifierDetails ? 'Disable editing webhook and date' : 'Enable editing webhook and date'}
+            title={isEditingNotifierDetails ? 'Disable editing webhook and date' : 'Enable editing webhook and date'}
+          >
+            {isEditingNotifierDetails
+              ? <Check size={14} strokeWidth={2.2} />
+              : <Pencil size={14} strokeWidth={2} />}
+          </button>
         </div>
 
         <div className="notifier-inline-fields">
@@ -159,18 +165,19 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
               placeholder="https://discord.com/api/webhooks/..."
               value={discordWebhookUrl}
               onChange={(event) => setDiscordWebhookUrl(event.target.value)}
+              autoComplete="off"
               disabled={!isEditingNotifierDetails}
             />
           </div>
 
-          <div className="notifier-field-row notifier-field-time">
-            <label htmlFor="notificationTime">Daily Schedule (PH Time)</label>
+          <div className="notifier-field-row notifier-field-date">
+            <label htmlFor="manualNotificationDate">Boss Respawn Date</label>
             <input
-              id="notificationTime"
-              className="filter-input notifier-time-input"
-              type="time"
-              value={notificationTime}
-              onChange={(event) => setNotificationTime(event.target.value)}
+              id="manualNotificationDate"
+              className="filter-input notifier-date-input"
+              type="date"
+              value={manualNotificationDate}
+              onChange={(event) => setManualNotificationDate(event.target.value)}
               disabled={!isEditingNotifierDetails}
             />
           </div>
@@ -181,7 +188,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
         <div className="notifier-selection-header">
           <div>
             <h3>Selected Bosses</h3>
-            <p>Only selected bosses will appear in the daily message</p>
+            <p>Only selected bosses scheduled on the target date are included in Discord notifications</p>
           </div>
           <span className="notifier-count-badge">{enabledBossIds.length} selected</span>
         </div>
@@ -236,11 +243,11 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
       <div className="notifier-actions">
         <button
           className="refresh-btn-filter notifier-save-btn"
-          onClick={handleSave}
-          disabled={saving || !isDirty}
+          onClick={handleSendNotification}
+          disabled={saving || !discordWebhookUrl.trim() || !manualNotificationDate || enabledBossIds.length === 0}
         >
-          {saving ? <Loader size={16} strokeWidth={1.8} /> : <Save size={16} strokeWidth={1.8} />}
-          Save Notifier Settings
+          {saving ? <Loader size={16} strokeWidth={1.8} /> : <Send size={16} strokeWidth={1.8} />}
+          Send Notification
         </button>
         {saveMessage && (
           <span className={`notifier-save-message ${isSaveError ? 'error' : 'success'}`}>
