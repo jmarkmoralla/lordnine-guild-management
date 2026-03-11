@@ -5,7 +5,10 @@ import { db } from '../config/firebase';
 export interface BossNotifierSettings {
   isEnabled: boolean;
   discordWebhookUrl: string;
+  scheduleMode: 'auto' | 'manual';
   notificationTime: string;
+  manualNotificationDate: string;
+  manualNotificationTime: string;
   enabledBossIds: string[];
   lastNotifiedDate: string;
   lastNotifiedScheduleKey: string;
@@ -24,7 +27,10 @@ export const BOSS_NOTIFIER_SETTINGS_DOC = doc(db, 'bossNotifier', 'settings');
 const DEFAULT_SETTINGS: BossNotifierSettings = {
   isEnabled: false,
   discordWebhookUrl: '',
+  scheduleMode: 'auto',
   notificationTime: '09:00',
+  manualNotificationDate: '',
+  manualNotificationTime: '',
   enabledBossIds: [],
   lastNotifiedDate: '',
   lastNotifiedScheduleKey: '',
@@ -32,6 +38,7 @@ const DEFAULT_SETTINGS: BossNotifierSettings = {
 };
 
 const normalizeSettings = (raw: Partial<BossNotifierSettings> | undefined): BossNotifierSettings => {
+  const normalizedScheduleMode = raw?.scheduleMode === 'manual' ? 'manual' : 'auto';
   const normalizedNotificationTime = raw?.notificationTime ?? '09:00';
   const normalizedLastNotifiedDate = raw?.lastNotifiedDate ?? '';
   const normalizedScheduleKey = raw?.lastNotifiedScheduleKey
@@ -42,7 +49,10 @@ const normalizeSettings = (raw: Partial<BossNotifierSettings> | undefined): Boss
   return {
     isEnabled: raw?.isEnabled === true,
     discordWebhookUrl: raw?.discordWebhookUrl ?? '',
+    scheduleMode: normalizedScheduleMode,
     notificationTime: normalizedNotificationTime,
+    manualNotificationDate: raw?.manualNotificationDate ?? '',
+    manualNotificationTime: raw?.manualNotificationTime ?? '',
     enabledBossIds: Array.isArray(raw?.enabledBossIds)
       ? raw.enabledBossIds.filter((id): id is string => typeof id === 'string')
       : [],

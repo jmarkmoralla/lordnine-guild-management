@@ -1,102 +1,66 @@
 .boss-notifier-page {
-  padding-bottom: 1rem;
+  padding-bottom: 0.8rem;
   max-width: 1120px;
 }
 
 .notifier-card {
-  background: var(--bg-secondary);
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-tertiary));
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 2px 8px var(--shadow-light);
-  padding: 1.15rem;
-  margin-bottom: 1.15rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .notifier-card:hover {
   border-color: var(--accent-blue);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--shadow-medium);
+  box-shadow: 0 6px 16px var(--shadow-medium);
 }
 
 .notifier-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-  margin-bottom: 0.95rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--border-light);
-}
-
-.notifier-card-toggle-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 .notifier-edit-toggle {
   width: 30px;
   height: 30px;
   border: 1px solid var(--border-light);
-  border-radius: 9px;
-  background: var(--bg-tertiary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.notifier-edit-toggle:not(.active) {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-color: var(--border-light);
+  transition: all 0.18s ease;
 }
 
 .notifier-edit-toggle:hover {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
-  background: var(--bg-secondary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px var(--shadow-light);
 }
 
 .notifier-edit-toggle.active {
   border-color: var(--accent-blue);
-  color: var(--bg-secondary);
   background: linear-gradient(135deg, var(--accent-blue), var(--accent-dark));
+  color: #ffffff;
   box-shadow: 0 4px 10px var(--shadow-light);
 }
 
-.notifier-edit-toggle.active:hover {
-  border-color: var(--accent-dark);
-  background: linear-gradient(135deg, var(--accent-dark), var(--accent-blue));
-}
-
-.notifier-edit-toggle:active {
-  transform: scale(0.96);
-}
-
 .notifier-edit-toggle:focus-visible {
+  outline: none;
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 3px var(--shadow-light);
-  outline: none;
-}
-
-.notifier-edit-toggle svg {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.notifier-edit-toggle.active svg {
-  transform: scale(1.05);
-}
-
-:root.dark-mode .notifier-edit-toggle.active {
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-dark));
-  color: #ffffff;
 }
 
 .notifier-card-header-main {
@@ -104,14 +68,15 @@
 }
 
 .notifier-card-header h3 {
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
+  letter-spacing: 0.01em;
 }
 
 .notifier-card-header p {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
 }
 
@@ -127,23 +92,30 @@
 }
 
 .notifier-field-row label {
-  font-size: 0.85rem;
+  font-size: 0.79rem;
   font-weight: 600;
   color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .notifier-inline-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 0.65rem;
   align-items: stretch;
+  margin-bottom: 0.7rem;
+}
+
+.notifier-schedule-fields {
+  margin-bottom: 0;
 }
 
 .notifier-inline-fields .notifier-field-row {
   margin-bottom: 0;
   border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 0.58rem 0.68rem;
+  border-radius: 9px;
+  padding: 0.5rem 0.62rem;
   background: var(--bg-tertiary);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
@@ -163,69 +135,55 @@
   flex: 1;
 }
 
-.notifier-field-time {
-  width: 250px;
-  flex-shrink: 0;
-}
-
-.notifier-field-time label {
-  white-space: nowrap;
-}
-
-.notifier-card-toggle {
-  margin-top: 0.05rem;
-  flex-shrink: 0;
-}
-
-.notifier-switch {
-  width: 52px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid var(--border-light);
-  background: var(--bg-tertiary);
-  padding: 0.2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  transition: all 0.25s ease;
-}
-
-.notifier-switch.active {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-}
-
-.notifier-switch-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  box-shadow: 0 1px 4px var(--shadow-light);
-  transition: transform 0.25s ease;
-}
-
-.notifier-switch.active .notifier-switch-thumb {
-  transform: translateX(21px);
-}
-
-.notifier-switch:focus-visible {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px var(--shadow-light);
-}
-
 .notifier-input {
   width: 100%;
-  min-height: 40px;
+  min-height: 38px;
 }
 
-.notifier-time-input {
+.notifier-date-input {
   width: 100%;
-  min-height: 40px;
+  min-height: 38px;
+}
+
+.notifier-manual-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.notifier-manual-fields .notifier-field-row {
+  margin-bottom: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 0.58rem 0.68rem;
+  background: var(--bg-tertiary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.notifier-manual-fields .notifier-field-row:hover {
+  border-color: var(--accent-blue);
+  background: var(--bg-secondary);
+}
+
+.notifier-manual-fields .notifier-field-row:focus-within {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--shadow-light);
+  background: var(--bg-secondary);
+}
+
+.notifier-manual-hint {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  margin-top: 0.45rem;
+  padding: 0.42rem 0.55rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
 }
 
 .notifier-field-row .filter-input {
-  border-radius: 8px;
-  padding: 0.65rem 0.85rem;
+  border-radius: 7px;
+  padding: 0.56rem 0.72rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
 }
@@ -238,7 +196,7 @@
 
 .notifier-field-row .filter-input:focus {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px var(--shadow-light);
+  box-shadow: 0 0 0 2px var(--shadow-light), inset 0 0 0 1px rgba(74, 144, 226, 0.3);
 }
 
 .notifier-selection-header {
@@ -261,12 +219,12 @@
 }
 
 .notifier-count-badge {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--accent-blue);
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 80%, var(--accent-blue) 20%);
   border: 1px solid var(--border-light);
   border-radius: 999px;
-  padding: 0.28rem 0.62rem;
+  padding: 0.24rem 0.55rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -447,8 +405,17 @@
 }
 
 .notifier-save-btn {
-  min-width: 220px;
+  min-width: 230px;
   justify-content: center;
+  letter-spacing: 0.01em;
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 70%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 78%, #ffffff 22%), var(--accent-dark));
+  color: #ffffff;
+}
+
+.notifier-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px var(--shadow-medium);
 }
 
 .notifier-actions .refresh-btn-filter[disabled] {
@@ -474,18 +441,16 @@
 }
 
 @media (max-width: 768px) {
-  .notifier-card-header {
-    align-items: center;
-  }
-
-  .notifier-card-toggle-wrap {
-    gap: 0.4rem;
-  }
-
   .notifier-inline-fields {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .notifier-manual-fields {
     grid-template-columns: 1fr;
     gap: 0.6rem;
   }
+
 
   .notifier-field-time {
     width: 100%;
