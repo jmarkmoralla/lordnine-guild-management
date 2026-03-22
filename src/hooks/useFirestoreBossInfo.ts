@@ -24,6 +24,7 @@ export interface BossInfo {
   spawnTime: string;
   scheduledStart?: string;
   scheduledEnd?: string;
+  scheduledDays?: string[];
   scheduledStartDay?: string;
   scheduledStartTime?: string;
   scheduledEndDay?: string;
@@ -72,6 +73,7 @@ export const useFirestoreBossInfo = (): UseFirestoreBossInfoReturn => {
             spawnType: 'fixed',
             scheduledStart: '',
             scheduledEnd: '',
+            scheduledDays: [],
             scheduledStartDay: '',
             scheduledStartTime: '',
             scheduledEndDay: '',

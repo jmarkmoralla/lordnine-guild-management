@@ -26,6 +26,7 @@ const defaultBoss: BossInfo = {
   spawnTime: '0',
   scheduledStart: '',
   scheduledEnd: '',
+  scheduledDays: [],
   scheduledStartDay: '',
   scheduledStartTime: '',
   scheduledEndDay: '',
@@ -37,6 +38,16 @@ const defaultBoss: BossInfo = {
 };
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+const DESTROYER_WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+const DAY_ABBREVIATIONS: Record<typeof DESTROYER_WEEKDAYS[number], string> = {
+  Monday: 'Mon',
+  Tuesday: 'Tue',
+  Wednesday: 'Wed',
+  Thursday: 'Thu',
+  Friday: 'Fri',
+  Saturday: 'Sat',
+  Sunday: 'Sun',
+};
 const RESPAWNING_WINDOW_MS = 10 * 60 * 1000;
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
   const totalMinutes = index * 30;
@@ -55,6 +66,28 @@ const toPhilippinesDateTime = (value: string) => {
   return `${phDate}T${value}:00+08:00`;
 };
 
+const normalizeScheduledDays = (days?: string[]) => {
+  const validDays = (days ?? [])
+    .filter((day): day is typeof WEEKDAYS[number] => WEEKDAYS.includes(day as typeof WEEKDAYS[number]));
+
+  return Array.from(new Set(validDays));
+};
+
+const getDestroyerScheduledDays = (boss: BossInfo) => {
+  const normalized = normalizeScheduledDays(boss.scheduledDays);
+  if (normalized.length > 0) return normalized;
+
+  // Backward compatibility for existing Destroyers without explicit days: treat as daily.
+  return [...WEEKDAYS];
+};
+
+const isDailyDestroyerSchedule = (days: string[]) => days.length === WEEKDAYS.length;
+
+const getOrderedDestroyerDays = (days?: string[]) => {
+  const normalizedDays = normalizeScheduledDays(days);
+  return DESTROYER_WEEKDAYS.filter((weekday) => normalizedDays.includes(weekday));
+};
+
 const normalizeBossPayload = (boss: BossInfo) => {
   const normalizedKilledTime = boss.status === 'dead'
     ? (toPhilippinesDateTime(boss.killedTime) || getPhilippinesNowIsoString())
@@ -66,11 +99,16 @@ const normalizeBossPayload = (boss: BossInfo) => {
   };
 
   if (boss.spawnType === 'scheduled') {
+    const scheduledDays = boss.bossType === 'Destroyer'
+      ? getOrderedDestroyerDays(boss.scheduledDays)
+      : [];
+
     return {
       ...payload,
       spawnTime: boss.spawnTime || '0',
       scheduledStart: '',
       scheduledEnd: '',
+      scheduledDays,
       scheduledStartDay: boss.scheduledStartDay || '',
       scheduledStartTime: boss.scheduledStartTime || '',
       scheduledEndDay: boss.scheduledEndDay || '',
@@ -82,6 +120,7 @@ const normalizeBossPayload = (boss: BossInfo) => {
     ...payload,
     scheduledStart: '',
     scheduledEnd: '',
+    scheduledDays: [],
     scheduledStartDay: '',
     scheduledStartTime: '',
     scheduledEndDay: '',
@@ -149,12 +188,22 @@ const getDailyNextOccurrence = (time?: string, referenceDate?: Date) => {
 const getScheduledRespawnCandidates = (boss: BossInfo, referenceDate?: Date) => {
   if (boss.spawnType !== 'scheduled') return [] as Date[];
 
-  // For Destroyer scheduled timers, dead/respawning/alive transitions are based on either timer reached.
   const candidates = boss.bossType === 'Destroyer'
-    ? [
-        getDailyNextOccurrence(boss.scheduledStartTime, referenceDate),
-        getDailyNextOccurrence(boss.scheduledEndTime, referenceDate),
-      ]
+    ? (() => {
+        const selectedDays = getDestroyerScheduledDays(boss);
+
+        if (isDailyDestroyerSchedule(selectedDays)) {
+          return [
+            getDailyNextOccurrence(boss.scheduledStartTime, referenceDate),
+            getDailyNextOccurrence(boss.scheduledEndTime, referenceDate),
+          ];
+        }
+
+        return selectedDays.flatMap((day) => [
+          getNextWeeklyOccurrence(day, boss.scheduledStartTime, referenceDate),
+          getNextWeeklyOccurrence(day, boss.scheduledEndTime, referenceDate),
+        ]);
+      })()
     : [
         getNextWeeklyOccurrence(boss.scheduledStartDay, boss.scheduledStartTime, referenceDate),
         getNextWeeklyOccurrence(boss.scheduledEndDay, boss.scheduledEndTime, referenceDate),
@@ -177,9 +226,10 @@ const getScheduleLines = (boss: BossInfo) => {
   if (boss.spawnType !== 'scheduled') return null;
 
   if (boss.bossType === 'Destroyer') {
-    // For Destroyer, show only times with "Daily" prefix
-    const startTime = boss.scheduledStartTime ? `Daily ${formatTimeLabel(boss.scheduledStartTime)}` : '';
-    const endTime = boss.scheduledEndTime ? `Daily ${formatTimeLabel(boss.scheduledEndTime)}` : '';
+    const selectedDays = getDestroyerScheduledDays(boss);
+    const dayLabel = isDailyDestroyerSchedule(selectedDays) ? 'Daily' : selectedDays.join(', ');
+    const startTime = boss.scheduledStartTime ? `${dayLabel} ${formatTimeLabel(boss.scheduledStartTime)}` : '';
+    const endTime = boss.scheduledEndTime ? `${dayLabel} ${formatTimeLabel(boss.scheduledEndTime)}` : '';
     const lines = Array.from(new Set([startTime, endTime].filter(Boolean)));
     return lines.length > 0 ? lines : null;
   }
@@ -289,6 +339,7 @@ const withDefaultSpawnType = (boss: BossInfo): BossInfo => ({
   spawnType: boss.spawnType || 'fixed',
   scheduledStart: boss.scheduledStart || '',
   scheduledEnd: boss.scheduledEnd || '',
+  scheduledDays: getOrderedDestroyerDays(boss.scheduledDays),
   scheduledStartDay: boss.scheduledStartDay || '',
   scheduledStartTime: boss.scheduledStartTime || '',
   scheduledEndDay: boss.scheduledEndDay || '',
@@ -307,6 +358,7 @@ const validateBossForm = (boss: BossInfo): string => {
       return 'Spawn time is required and must be a valid number.';
     }
   } else if (boss.bossType === 'Destroyer') {
+    if (normalizeScheduledDays(boss.scheduledDays).length === 0) return 'Please select at least one respawn day.';
     if (!boss.scheduledStartTime) return 'Spawn Time 1 is required.';
     if (!boss.scheduledEndTime) return 'Spawn Time 2 is required.';
   } else {
@@ -339,6 +391,20 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   const [statusTick, setStatusTick] = useState(0);
   const bossesRef = useRef<BossInfo[]>([]);
   const isPromotingRef = useRef(false);
+
+  const toggleDestroyerDay = (boss: BossInfo, day: typeof DESTROYER_WEEKDAYS[number], checked: boolean): BossInfo => {
+    const currentDays = new Set(getOrderedDestroyerDays(boss.scheduledDays));
+    if (checked) {
+      currentDays.add(day);
+    } else {
+      currentDays.delete(day);
+    }
+
+    return {
+      ...boss,
+      scheduledDays: DESTROYER_WEEKDAYS.filter((weekday) => currentDays.has(weekday)),
+    };
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -733,7 +799,14 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <label>Type</label>
                   <select
                     value={newBoss.bossType}
-                    onChange={(event) => setNewBoss({ ...newBoss, bossType: event.target.value as BossType })}
+                    onChange={(event) => {
+                      const nextBossType = event.target.value as BossType;
+                      setNewBoss({
+                        ...newBoss,
+                        bossType: nextBossType,
+                        ...(nextBossType !== 'Destroyer' ? { scheduledDays: [] } : {}),
+                      });
+                    }}
                   >
                     <option value="Field Boss">Field Boss</option>
                     <option value="Destroyer">Destroyer</option>
@@ -761,6 +834,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                           ? {
                               scheduledStart: '',
                               scheduledEnd: '',
+                              scheduledDays: [],
                               scheduledStartDay: '',
                               scheduledStartTime: '',
                               scheduledEndDay: '',
@@ -790,6 +864,26 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <>
                     {newBoss.bossType === 'Destroyer' ? (
                       <>
+                        <div className="form-group destroyer-days-group">
+                          <label>Respawn Days</label>
+                          <div className="destroyer-days-checkboxes">
+                            {DESTROYER_WEEKDAYS.map((day) => {
+                              const isChecked = getOrderedDestroyerDays(newBoss.scheduledDays).includes(day);
+                              return (
+                                <label key={day} className="destroyer-day-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setNewBoss(toggleDestroyerDay(newBoss, day, event.target.checked));
+                                    }}
+                                  />
+                                  <span>{DAY_ABBREVIATIONS[day]}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div className="form-group">
                           <label>Spawn Time 1</label>
                           <select
@@ -984,7 +1078,14 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <label>Type</label>
                   <select
                     value={editingBoss.bossType}
-                    onChange={(event) => setEditingBoss({ ...editingBoss, bossType: event.target.value as BossType })}
+                    onChange={(event) => {
+                      const nextBossType = event.target.value as BossType;
+                      setEditingBoss({
+                        ...editingBoss,
+                        bossType: nextBossType,
+                        ...(nextBossType !== 'Destroyer' ? { scheduledDays: [] } : {}),
+                      });
+                    }}
                   >
                     <option value="Field Boss">Field Boss</option>
                     <option value="Destroyer">Destroyer</option>
@@ -1012,6 +1113,7 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                           ? {
                               scheduledStart: '',
                               scheduledEnd: '',
+                              scheduledDays: [],
                               scheduledStartDay: '',
                               scheduledStartTime: '',
                               scheduledEndDay: '',
@@ -1041,6 +1143,26 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                   <>
                     {editingBoss.bossType === 'Destroyer' ? (
                       <>
+                        <div className="form-group destroyer-days-group">
+                          <label>Respawn Days</label>
+                          <div className="destroyer-days-checkboxes">
+                            {DESTROYER_WEEKDAYS.map((day) => {
+                              const isChecked = getOrderedDestroyerDays(editingBoss.scheduledDays).includes(day);
+                              return (
+                                <label key={day} className="destroyer-day-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setEditingBoss(toggleDestroyerDay(editingBoss, day, event.target.checked));
+                                    }}
+                                  />
+                                  <span>{DAY_ABBREVIATIONS[day]}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div className="form-group">
                           <label>Spawn Time 1</label>
                           <select
