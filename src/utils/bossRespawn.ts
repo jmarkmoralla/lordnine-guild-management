@@ -3,6 +3,23 @@ import { getPhilippinesNowDate } from './philippinesTime';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
+const normalizeScheduledDays = (days?: string[]) => {
+  const validDays = (days ?? [])
+    .filter((day): day is typeof WEEKDAYS[number] => WEEKDAYS.includes(day as typeof WEEKDAYS[number]));
+
+  return Array.from(new Set(validDays));
+};
+
+const getDestroyerScheduledDays = (boss: BossInfo) => {
+  const normalized = normalizeScheduledDays(boss.scheduledDays);
+  if (normalized.length > 0) return normalized;
+
+  // Backward compatibility for existing Destroyers without explicit days: treat as daily.
+  return [...WEEKDAYS];
+};
+
+const isDailyDestroyerSchedule = (days: string[]) => days.length === WEEKDAYS.length;
+
 const getNextWeeklyOccurrence = (day?: string, time?: string, referenceDate?: Date) => {
   if (!day || !time) return null;
   const dayIndex = WEEKDAYS.indexOf(day as typeof WEEKDAYS[number]);
@@ -50,10 +67,21 @@ const getScheduledRespawnCandidates = (boss: BossInfo, referenceDate?: Date) => 
   if (boss.spawnType !== 'scheduled') return [] as Date[];
 
   const candidates = boss.bossType === 'Destroyer'
-    ? [
-        getDailyNextOccurrence(boss.scheduledStartTime, referenceDate),
-        getDailyNextOccurrence(boss.scheduledEndTime, referenceDate),
-      ]
+    ? (() => {
+        const selectedDays = getDestroyerScheduledDays(boss);
+
+        if (isDailyDestroyerSchedule(selectedDays)) {
+          return [
+            getDailyNextOccurrence(boss.scheduledStartTime, referenceDate),
+            getDailyNextOccurrence(boss.scheduledEndTime, referenceDate),
+          ];
+        }
+
+        return selectedDays.flatMap((day) => [
+          getNextWeeklyOccurrence(day, boss.scheduledStartTime, referenceDate),
+          getNextWeeklyOccurrence(day, boss.scheduledEndTime, referenceDate),
+        ]);
+      })()
     : [
         getNextWeeklyOccurrence(boss.scheduledStartDay, boss.scheduledStartTime, referenceDate),
         getNextWeeklyOccurrence(boss.scheduledEndDay, boss.scheduledEndTime, referenceDate),

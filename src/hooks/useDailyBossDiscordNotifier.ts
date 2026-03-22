@@ -18,6 +18,23 @@ const RETRY_AFTER_ERROR_MS = 5 * 60 * 1000;
 const SEND_LOCK_TTL_MS = 2 * 60 * 1000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
+const normalizeScheduledDays = (days?: string[]) => {
+  const validDays = (days ?? [])
+    .filter((day): day is typeof WEEKDAYS[number] => WEEKDAYS.includes(day as typeof WEEKDAYS[number]));
+
+  return Array.from(new Set(validDays));
+};
+
+const getDestroyerScheduledDays = (boss: BossInfo) => {
+  const normalized = normalizeScheduledDays(boss.scheduledDays);
+  if (normalized.length > 0) return normalized;
+
+  // Backward compatibility for existing Destroyers without explicit days: treat as daily.
+  return [...WEEKDAYS];
+};
+
+const isDailyDestroyerSchedule = (days: string[]) => days.length === WEEKDAYS.length;
+
 const getPhilippinesDateKey = (date: Date) => {
   const parts = new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila',
@@ -116,7 +133,15 @@ interface BossScheduleEntry {
 
 const getBossRespawnForDate = (boss: BossInfo, dateKey: string): Date | null => {
   if (boss.spawnType === 'scheduled') {
+    const weekday = getPhilippinesWeekdayForDateKey(dateKey);
+    if (!weekday) return null;
+
     if (boss.bossType === 'Destroyer') {
+      const selectedDays = getDestroyerScheduledDays(boss);
+      if (!isDailyDestroyerSchedule(selectedDays) && !selectedDays.includes(weekday)) {
+        return null;
+      }
+
       const candidates = [
         createPhilippinesDateForKeyAndTime(dateKey, boss.scheduledStartTime ?? ''),
         createPhilippinesDateForKeyAndTime(dateKey, boss.scheduledEndTime ?? ''),
@@ -125,9 +150,6 @@ const getBossRespawnForDate = (boss: BossInfo, dateKey: string): Date | null => 
       if (candidates.length === 0) return null;
       return candidates.sort((first, second) => first.getTime() - second.getTime())[0];
     }
-
-    const weekday = getPhilippinesWeekdayForDateKey(dateKey);
-    if (!weekday) return null;
 
     const candidates = [
       boss.scheduledStartDay === weekday
