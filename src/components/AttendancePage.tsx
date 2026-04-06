@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Eye, EyeOff, Loader, Plus, Trash2, X } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import '../styles/Attendance.css';
@@ -37,6 +37,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isSyncingAttendanceSummary, setIsSyncingAttendanceSummary] = useState(false);
   const [createAttendanceError, setCreateAttendanceError] = useState<string | null>(null);
   const [draftAttendanceByMemberId, setDraftAttendanceByMemberId] = useState<Record<string, AttendanceStatus | 'unmarked'>>({});
+  const [selectedBossNames, setSelectedBossNames] = useState<string[]>([]);
+  const [isBossDropdownOpen, setIsBossDropdownOpen] = useState(false);
   const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
   const [editingMetricValue, setEditingMetricValue] = useState('');
   const [isSavingMetric, setIsSavingMetric] = useState(false);
@@ -52,6 +54,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isLoadingMemberDetails, setIsLoadingMemberDetails] = useState(false);
   const [memberDetailsError, setMemberDetailsError] = useState<string | null>(null);
   const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
+  const bossDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const { members, loading: membersLoading, error: membersError } = useFirestoreMembers();
   const { bosses, loading: bossesLoading, error: bossesError } = useFirestoreBossInfo();
@@ -141,6 +144,45 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setDraftAttendanceByMemberId(nextDraft);
   }, [canManage, isCreateAttendanceOpen, members]);
 
+  useEffect(() => {
+    if (!canManage || !isCreateAttendanceOpen) return;
+
+    if (forceDashBossName) {
+      setSelectedBossNames(['-']);
+      return;
+    }
+
+    if (bossNameOptions.length === 0) {
+      setSelectedBossNames([]);
+      return;
+    }
+
+    setSelectedBossNames((current) => {
+      const stillAvailable = current.filter((name) => bossNameOptions.includes(name));
+      if (stillAvailable.length > 0) return stillAvailable;
+
+      if (bossName && bossNameOptions.includes(bossName)) {
+        return [bossName];
+      }
+
+      return [bossNameOptions[0]];
+    });
+  }, [canManage, isCreateAttendanceOpen, forceDashBossName, bossNameOptions, bossName]);
+
+  useEffect(() => {
+    if (!isCreateAttendanceOpen || !isBossDropdownOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!bossDropdownRef.current) return;
+      if (!bossDropdownRef.current.contains(event.target as Node)) {
+        setIsBossDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [isCreateAttendanceOpen, isBossDropdownOpen]);
+
   const recordsByMemberId = useMemo(() => {
     const entries = records.map((record) => [record.memberId, record.status] as const);
     return new Map<string, AttendanceStatus>(entries);
@@ -208,6 +250,46 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       return nextDraft;
     });
     setIsClearingAll(false);
+  };
+
+  const selectAllBosses = () => {
+    if (forceDashBossName) {
+      setSelectedBossNames(['-']);
+      return;
+    }
+
+    setSelectedBossNames([...bossNameOptions]);
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
+  };
+
+  const clearSelectedBosses = () => {
+    if (forceDashBossName) {
+      setSelectedBossNames(['-']);
+      return;
+    }
+
+    setSelectedBossNames([]);
+  };
+
+  const toggleBossSelection = (bossOptionName: string) => {
+    if (forceDashBossName) {
+      setSelectedBossNames(['-']);
+      return;
+    }
+
+    setSelectedBossNames((current) => {
+      if (current.includes(bossOptionName)) {
+        return current.filter((name) => name !== bossOptionName);
+      }
+
+      return [...current, bossOptionName];
+    });
+
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
   };
 
   const resetAttendanceToolbarState = () => {
@@ -308,6 +390,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const saveAttendanceFromModal = async () => {
     if (!canManage) return;
 
+    const selectedBossesToPersist = forceDashBossName
+      ? ['-']
+      : selectedBossNames.filter((selectedBossName) => bossNameOptions.includes(selectedBossName));
+
     const membersToPersist = members.filter((member): member is typeof member & { id: string } => Boolean(member.id));
 
     const presentMembersForSummary = membersToPersist
@@ -323,27 +409,37 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       return;
     }
 
+    if (selectedBossesToPersist.length === 0) {
+      setCreateAttendanceError('Select atleast 1 boss before creating attendance.');
+      return;
+    }
+
     try {
       setCreateAttendanceError(null);
       setIsSavingAttendanceData(true);
       setIsSyncingAttendanceSummary(true);
 
       await Promise.all(
-        membersToPersist.map(async (member) => {
-          const draftStatus = draftAttendanceByMemberId[member.id] || 'unmarked';
+        selectedBossesToPersist.flatMap((selectedBossName) => (
+          membersToPersist.map(async (member) => {
+            const draftStatus = draftAttendanceByMemberId[member.id] || 'unmarked';
 
-          if (draftStatus === 'present') {
-            const multiplier = getCombatPowerMultiplier(Number(member.combatPower || 0));
-            await upsertAttendance(member.id, member.name, 'present', multiplier);
-          }
-        })
+            if (draftStatus === 'present') {
+              const multiplier = getCombatPowerMultiplier(Number(member.combatPower || 0));
+              await upsertAttendance(member.id, member.name, 'present', multiplier, selectedBossName);
+            }
+          })
+        ))
       );
 
       if (presentMembersForSummary.length > 0) {
-        await syncPresentMembersToSummary(attendanceType, presentMembersForSummary);
+        await Promise.all(
+          selectedBossesToPersist.map(() => syncPresentMembersToSummary(attendanceType, presentMembersForSummary))
+        );
       }
 
       setIsCreateAttendanceOpen(false);
+      setIsBossDropdownOpen(false);
       setCreateAttendanceError(null);
     } catch (error) {
       console.error('Failed to sync attendance summary:', error);
@@ -1028,6 +1124,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           className="attendance-modal-overlay"
           onClick={() => {
             setIsCreateAttendanceOpen(false);
+            setIsBossDropdownOpen(false);
             setCreateAttendanceError(null);
           }}
         >
@@ -1038,6 +1135,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 className="attendance-modal-close"
                 onClick={() => {
                   setIsCreateAttendanceOpen(false);
+                  setIsBossDropdownOpen(false);
                   setCreateAttendanceError(null);
                 }}
                 aria-label="Close"
@@ -1063,32 +1161,95 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <option value="Kransia">Kransia</option>
                 <option value="Guild vs. Guild">Guild vs. Guild</option>
               </select>
-              <select
-                className="filter-select"
-                value={bossName}
-                onChange={(event) => setBossName(event.target.value)}
-                disabled={forceDashBossName || bossNameOptions.length === 0}
-              >
-                {forceDashBossName ? (
-                  <option value="-">-</option>
-                ) : bossNameOptions.length === 0 ? (
-                  <option value="">No bosses available</option>
-                ) : (
-                  bossNameOptions.map((nameOption) => (
-                    <option key={nameOption} value={nameOption}>
-                      {nameOption}
-                    </option>
-                  ))
+              <div className="boss-multi-dropdown" ref={bossDropdownRef}>
+                <button
+                  type="button"
+                  className="boss-multi-dropdown-trigger"
+                  onClick={() => setIsBossDropdownOpen((current) => !current)}
+                  disabled={bossNameOptions.length === 0}
+                >
+                  <span className="boss-multi-dropdown-label">Bosses</span>
+                  <span className="boss-multi-dropdown-value">
+                    {forceDashBossName
+                      ? '-'
+                      : selectedBossNames.length === 0
+                        ? 'Select boss'
+                        : `${selectedBossNames.length} selected`}
+                  </span>
+                  <ChevronDown
+                    size={15}
+                    strokeWidth={2}
+                    className={`boss-multi-dropdown-icon ${isBossDropdownOpen ? 'open' : ''}`}
+                  />
+                </button>
+
+                {isBossDropdownOpen && (
+                  <div className="boss-multi-dropdown-menu">
+                    {!forceDashBossName && bossNameOptions.length > 0 && (
+                      <div className="boss-multi-dropdown-actions">
+                        <button
+                          type="button"
+                          className="boss-multi-dropdown-action"
+                          onClick={selectAllBosses}
+                          disabled={selectedBossNames.length === bossNameOptions.length}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="boss-multi-dropdown-action muted"
+                          onClick={clearSelectedBosses}
+                          disabled={selectedBossNames.length === 0}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          className="boss-multi-dropdown-close"
+                          onClick={() => setIsBossDropdownOpen(false)}
+                          aria-label="Close boss dropdown"
+                          title="Close"
+                        >
+                          <X size={14} strokeWidth={2.4} />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="boss-multi-dropdown-options">
+                      {(forceDashBossName ? ['-'] : bossNameOptions).map((nameOption) => {
+                        const isChecked = selectedBossNames.includes(nameOption);
+                        return (
+                          <button
+                            key={nameOption}
+                            type="button"
+                            className="boss-multi-dropdown-option"
+                            aria-checked={isChecked}
+                            role="menuitemcheckbox"
+                            onClick={() => toggleBossSelection(nameOption)}
+                            disabled={forceDashBossName}
+                          >
+                            <span className="boss-multi-dropdown-checkbox" aria-hidden="true">
+                              {isChecked && <Check size={12} strokeWidth={3} />}
+                            </span>
+                            <span className="boss-multi-dropdown-option-name">{nameOption}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-              </select>
+              </div>
               <input
                 type="text"
-                className="filter-input"
+                className="filter-input create-attendance-search-input"
                 placeholder="Search member name"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
+            {!forceDashBossName && bossNameOptions.length > 0 && (
+              <p className="filter-select-hint">Select multiple bosses using the checkboxes.</p>
+            )}
 
             {memberAttendanceTable}
 
