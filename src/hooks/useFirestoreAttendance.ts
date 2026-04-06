@@ -30,7 +30,13 @@ interface UseFirestoreAttendanceReturn {
   records: AttendanceRecord[];
   loading: boolean;
   error: string | null;
-  upsertAttendance: (memberId: string, memberName: string, status: AttendanceStatus, multiplier?: number) => Promise<void>;
+  upsertAttendance: (
+    memberId: string,
+    memberName: string,
+    status: AttendanceStatus,
+    multiplier?: number,
+    bossNameOverride?: string
+  ) => Promise<void>;
   clearAttendance: (memberId: string) => Promise<void>;
 }
 
@@ -122,16 +128,23 @@ export const useFirestoreAttendance = (
     return () => unsubscribe();
   }, [date, attendanceType, bossName]);
 
-  const upsertAttendance = async (memberId: string, memberName: string, status: AttendanceStatus, multiplier = 1) => {
+  const upsertAttendance = async (
+    memberId: string,
+    memberName: string,
+    status: AttendanceStatus,
+    multiplier = 1,
+    bossNameOverride?: string
+  ) => {
+    const targetBossName = (bossNameOverride || bossName).trim();
     const attendanceDateTime = buildAttendanceDateTime(date);
-    const attendanceDocId = buildAttendanceDocId(attendanceDateTime, memberId, attendanceType, bossName);
+    const attendanceDocId = buildAttendanceDocId(attendanceDateTime, memberId, attendanceType, targetBossName);
     await setDoc(
       doc(db, 'guildAttendance', attendanceDocId),
       {
         memberId,
         name: memberName,
         attendanceType,
-        bossName,
+        bossName: targetBossName,
         attendanceDate: attendanceDateTime,
         status: toFirestoreStatus(status),
         multiplier: Number(multiplier) || 1,

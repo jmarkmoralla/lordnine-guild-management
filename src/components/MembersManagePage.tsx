@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Award, Loader, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Award, Crown, Loader, Pencil, Plus, Trophy, Trash2, Users, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
+import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { DEFAULT_MEMBER_CLASS, MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
 
 interface MemberRanking {
@@ -22,6 +23,7 @@ interface MembersManagePageProps {
 
 const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const { members, loading, error, addMember, updateMember, deleteMember } = useFirestoreMembers();
+  const { guildInfo, loading: guildLoading } = useFirestoreGuildInfo();
   const [editingMember, setEditingMember] = useState<MemberRanking | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -29,6 +31,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [copiedWalletMemberId, setCopiedWalletMemberId] = useState<string | null>(null);
   const [sortBy] = useState<'combatPower'>('combatPower');
   const [searchQuery, setSearchQuery] = useState('');
+  const guildMaster = members.find((member) => member.memberType === 'guild master');
 
   const sortedMembers = [...members].sort((a, b) => {
     if (sortBy === 'combatPower') return b.combatPower - a.combatPower;
@@ -164,6 +167,46 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       <div className="page-header">
         <h2>Member Management</h2>
         <p className="page-subtitle">Add, update, and remove guild members</p>
+      </div>
+
+      <div className="members-stats-grid">
+        <div className="members-stat-card">
+          <div className="members-stat-icon" aria-hidden="true">
+            <Users size={24} strokeWidth={1.75} />
+          </div>
+          <div className="members-stat-content">
+            <h3>Guild Members</h3>
+            <p className="members-stat-value">{members.length}/50</p>
+          </div>
+        </div>
+
+        <div className="members-stat-card">
+          <div className="members-stat-icon" aria-hidden="true">
+            <Trophy size={24} strokeWidth={1.75} />
+          </div>
+          <div className="members-stat-content">
+            <h3>Guild Level</h3>
+            <p className="members-stat-value">
+              {guildLoading ? (
+                <Loader size={18} strokeWidth={2} />
+              ) : guildInfo?.guildLevel !== undefined ? (
+                guildInfo.guildLevel
+              ) : (
+                'N/A'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="members-stat-card">
+          <div className="members-stat-icon" aria-hidden="true">
+            <Crown size={24} strokeWidth={1.75} />
+          </div>
+          <div className="members-stat-content">
+            <h3>Guild Master</h3>
+            <p className="members-stat-value">{guildMaster?.name || 'None'}</p>
+          </div>
+        </div>
       </div>
 
       <div className="rankings-filters">
