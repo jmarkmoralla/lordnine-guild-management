@@ -21,7 +21,8 @@ interface UseFirestoreAttendanceSummaryReturn {
   updateSummaryRow: (rowId: string, values: SummaryEditableFields) => Promise<void>;
   syncPresentMembersToSummary: (
     attendanceType: string,
-    presentMembers: Array<{ name: string; multiplier: number }>
+    presentMembers: Array<{ name: string; multiplier: number }>,
+    selectedBossCount?: number
   ) => Promise<void>;
   refreshSummaryForMember: (memberName: string) => Promise<void>;
 }
@@ -136,10 +137,16 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
 
   const syncPresentMembersToSummary = async (
     attendanceType: string,
-    presentMembers: Array<{ name: string; multiplier: number }>
+    presentMembers: Array<{ name: string; multiplier: number }>,
+    selectedBossCount = 1
   ) => {
     const targetField = getSummaryFieldByAttendanceType(attendanceType);
     if (!targetField) return;
+
+    const normalizedSelectedBossCount = Number(selectedBossCount);
+    const effectiveSelectedBossCount = Number.isFinite(normalizedSelectedBossCount) && normalizedSelectedBossCount > 0
+      ? normalizedSelectedBossCount
+      : 1;
 
     const existingByName = new Map(summaryRows.map((row) => [row.name.trim().toLowerCase(), row]));
     const batch = writeBatch(db);
@@ -152,7 +159,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
         ? normalizedMultiplier
         : 1;
-      const attendancePoints = ATTENDANCE_POINTS[targetField] * effectiveMultiplier;
+      const attendancePoints = ATTENDANCE_POINTS[targetField] * effectiveMultiplier * effectiveSelectedBossCount;
 
       const existing = existingByName.get(normalizedName);
 
