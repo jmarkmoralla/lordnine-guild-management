@@ -433,8 +433,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       );
 
       if (presentMembersForSummary.length > 0) {
-        await Promise.all(
-          selectedBossesToPersist.map(() => syncPresentMembersToSummary(attendanceType, presentMembersForSummary))
+        await syncPresentMembersToSummary(
+          attendanceType,
+          presentMembersForSummary,
+          selectedBossesToPersist.length
         );
       }
 
