@@ -546,6 +546,22 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return summaryRowsComputed.filter((row) => row.name.toLowerCase().includes(normalizedSearch));
   }, [summaryRowsComputed, manageSearchQuery]);
 
+  const zeroAttendanceMembers = useMemo(() => {
+    const totalAttendanceByName = new Map(
+      summaryRowsComputed.map((row) => [row.name.trim().toLowerCase(), Number(row.computedTotalAttendance || 0)] as const)
+    );
+
+    return members
+      .filter((member) => {
+        const normalizedName = member.name.trim().toLowerCase();
+        if (!normalizedName) return false;
+
+        const totalAttendance = totalAttendanceByName.get(normalizedName) ?? 0;
+        return totalAttendance <= 0;
+      })
+      .sort((first, second) => first.rank - second.rank);
+  }, [members, summaryRowsComputed]);
+
   const startMetricEdit = (currentValue: number) => {
     setEditingMetric('totalFund');
     setEditingMetricValue(String(currentValue));
@@ -1050,6 +1066,44 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           </table>
         </div>
       )}
+
+      <div className="attendance-table-container attendance-zero-summary">
+        <div className="attendance-zero-summary-header">
+          <h3>Members with 0 Attendance</h3>
+          <span className="attendance-zero-summary-count">{zeroAttendanceMembers.length} total</span>
+        </div>
+
+        <table className="attendance-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Name</th>
+              <th className="col-combat-power">Combat Power</th>
+              <th className="col-zero-multiplier">Multiplier</th>
+              <th className="col-zero-total-pts">Total Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {zeroAttendanceMembers.map((member, index) => (
+              <tr key={member.id || `${member.name}-${member.rank}`}>
+                <td className="member-rank">{index + 1}</td>
+                <td className="member-name">{member.name}</td>
+                <td className="member-date member-combat-power">{Number(member.combatPower || 0).toLocaleString()}</td>
+                <td className="member-date member-zero-multiplier">{getCombatPowerMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
+                <td className="member-date member-zero-total-pts">0</td>
+              </tr>
+            ))}
+
+            {!loading && zeroAttendanceMembers.length === 0 && (
+              <tr>
+                <td colSpan={5} className="attendance-empty-row">
+                  No members with zero attendance.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {canManage && isResetAttendanceConfirmOpen && (
         <div className="attendance-modal-overlay" onClick={closeResetAttendanceConfirm}>

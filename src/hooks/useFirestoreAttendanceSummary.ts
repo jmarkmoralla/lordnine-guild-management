@@ -40,11 +40,17 @@ const ATTENDANCE_POINTS: Readonly<Record<keyof SummaryEditableFields, number>> =
   guildvsguild: 1,
 };
 
-const getSummaryFieldByAttendanceType = (attendanceType: string): keyof SummaryEditableFields => {
-  if (attendanceType === 'Field Boss') return 'fieldBoss';
-  if (attendanceType === 'Guild Boss') return 'guildBoss';
-  if (attendanceType === 'Kransia') return 'kransia';
-  return 'guildvsguild';
+const normalizeAttendanceType = (attendanceType: string) => attendanceType.trim().toLowerCase();
+
+const getSummaryFieldByAttendanceType = (attendanceType: string): keyof SummaryEditableFields | null => {
+  const normalizedType = normalizeAttendanceType(attendanceType);
+
+  if (normalizedType === 'field boss') return 'fieldBoss';
+  if (normalizedType === 'guild boss') return 'guildBoss';
+  if (normalizedType === 'kransia') return 'kransia';
+  if (normalizedType === 'guild vs. guild' || normalizedType === 'guild vs guild') return 'guildvsguild';
+
+  return null;
 };
 
 const computeTotalPoints = (values: SummaryEditableFields) => (
@@ -133,6 +139,8 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     presentMembers: Array<{ name: string; multiplier: number }>
   ) => {
     const targetField = getSummaryFieldByAttendanceType(attendanceType);
+    if (!targetField) return;
+
     const existingByName = new Map(summaryRows.map((row) => [row.name.trim().toLowerCase(), row]));
     const batch = writeBatch(db);
 
@@ -220,6 +228,8 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     attendanceSnapshot.docs.forEach((attendanceDoc) => {
       const data = attendanceDoc.data() as { attendanceType?: string; multiplier?: number };
       const targetField = getSummaryFieldByAttendanceType(data.attendanceType || '');
+      if (!targetField) return;
+
       const normalizedMultiplier = Number(data.multiplier ?? 1);
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
         ? normalizedMultiplier

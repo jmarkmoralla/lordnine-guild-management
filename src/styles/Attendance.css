@@ -1090,6 +1090,43 @@
   color: var(--text-primary);
 }
 
+.attendance-zero-summary {
+  margin-top: -0.25rem;
+}
+
+.attendance-zero-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0.72rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.attendance-zero-summary-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.attendance-zero-summary-count {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+}
+
+.attendance-zero-summary .col-zero-multiplier,
+.attendance-zero-summary .col-zero-total-pts,
+.attendance-zero-summary .member-zero-multiplier,
+.attendance-zero-summary .member-zero-total-pts {
+  width: 110px;
+  min-width: 110px;
+  text-align: center;
+}
+
 .summary-action-col,
 .summary-action-cell {
   text-align: center;
