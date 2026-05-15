@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Eye, EyeOff, Loader, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
+import Fuse from 'fuse.js';
+import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, Trash2, X } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import '../styles/Attendance.css';
@@ -9,12 +10,180 @@ import { type AttendanceStatus, useFirestoreAttendance } from '../hooks/useFires
 import { useFirestoreAttendanceSummary } from '../hooks/useFirestoreAttendanceSummary';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
+import { getAttendancePoints, getAttendancePointsForBossSelection } from '../utils/attendancePoints.ts';
+import { getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
 import { getPhilippinesNowParts } from '../utils/philippinesTime';
 
 interface AttendancePageProps {
   userType: 'guest' | 'admin';
   mode?: 'view' | 'manage';
 }
+
+type CreateAttendanceTab = 'ocr' | 'manual';
+
+interface OcrAttendanceRow {
+  id: string;
+  detectedName: string;
+  matchedMemberId: string | null;
+  matchedMemberName: string | null;
+  combatPower: number | null;
+  multiplier: number | null;
+  status: 'matched' | 'unmatched';
+}
+
+const OCR_ENGLISH_ONLY_SANITIZER = /[^A-Za-z\s]/g;
+const DEFAULT_OCR_PROXY_PATH = '/api/ocr-space';
+const OCR_SPACE_ENDPOINT = import.meta.env.VITE_OCR_SPACE_ENDPOINT?.trim() || 'https://api.ocr.space/parse/image';
+const OCR_SPACE_API_KEY = import.meta.env.VITE_OCR_SPACE_API_KEY?.trim() || '';
+
+const getDefaultOcrProxyEndpoint = () => {
+  const configuredEndpoint = import.meta.env.VITE_OCR_PROXY_ENDPOINT?.trim();
+  if (configuredEndpoint) {
+    return configuredEndpoint;
+  }
+
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim();
+  const isBrowser = typeof window !== 'undefined';
+  const hostname = isBrowser ? window.location.hostname : '';
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (projectId && isLocalHost) {
+    return `https://asia-southeast1-${projectId}.cloudfunctions.net/ocrSpaceProxy`;
+  }
+
+  return DEFAULT_OCR_PROXY_PATH;
+};
+
+const OCR_PROXY_ENDPOINT = getDefaultOcrProxyEndpoint();
+
+interface OcrSpaceParsedResult {
+  ParsedText?: string;
+}
+
+interface OcrSpaceResponse {
+  IsErroredOnProcessing?: boolean;
+  ErrorMessage?: string[] | string;
+  ErrorDetails?: string;
+  ParsedResults?: OcrSpaceParsedResult[];
+  error?: string;
+}
+
+const getOcrErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return 'Failed to process the image. Please try another upload or paste a clearer screenshot.';
+};
+
+const canUseDirectOcrSpaceFallback = () => {
+  if (!OCR_SPACE_API_KEY) {
+    return false;
+  }
+
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+};
+
+const parseOcrResponse = async (response: Response) => {
+  const responseText = await response.text();
+
+  if (!responseText.trim()) {
+    return {
+      payload: null,
+      rawText: responseText,
+    };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(responseText) as OcrSpaceResponse,
+      rawText: responseText,
+    };
+  } catch {
+    return {
+      payload: null,
+      rawText: responseText,
+    };
+  }
+};
+
+const normalizeOcrName = (value: string) => value.toLowerCase().replace(/[^a-z]/g, '');
+
+const getOcrRowKey = (row: Pick<OcrAttendanceRow, 'matchedMemberId' | 'detectedName'>) => {
+  if (row.matchedMemberId) {
+    return `member:${row.matchedMemberId}`;
+  }
+
+  const normalizedDetectedName = normalizeOcrName(row.detectedName);
+  return normalizedDetectedName ? `detected:${normalizedDetectedName}` : '';
+};
+
+const tokenizeOcrName = (value: string) =>
+  value
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((token) => token.length >= 2);
+
+const extractOcrNameCandidates = (rawText: string) => {
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.replace(OCR_ENGLISH_ONLY_SANITIZER, ' ').replace(/\s+/g, ' ').trim())
+    .filter((line) => /[a-z]/i.test(line))
+    .filter((line) => normalizeOcrName(line).length >= 3);
+};
+
+const readBlobAsDataUrl = (imageSource: Blob | File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    if (typeof reader.result === 'string') {
+      resolve(reader.result);
+      return;
+    }
+
+    reject(new Error('Failed to read the image for OCR.'));
+  };
+
+  reader.onerror = () => {
+    reject(reader.error || new Error('Failed to read the image for OCR.'));
+  };
+
+  reader.readAsDataURL(imageSource);
+});
+
+const requestOcrViaDirectApi = async (imageDataUrl: string) => {
+  const response = await fetch(OCR_SPACE_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      apikey: OCR_SPACE_API_KEY,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      base64Image: imageDataUrl,
+      language: 'eng',
+      OCREngine: '2',
+      isOverlayRequired: 'false',
+      scale: 'true',
+      detectOrientation: 'true',
+    }).toString(),
+  });
+
+  const { payload: result, rawText } = await parseOcrResponse(response);
+
+  if (!response.ok) {
+    throw new Error(rawText.trim() || `OCR.space request failed with status ${response.status}`);
+  }
+
+  if (!result) {
+    throw new Error('OCR.space returned an empty response.');
+  }
+
+  return result;
+};
 
 const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view' }) => {
   const canManage = userType === 'admin' && mode === 'manage';
@@ -37,6 +206,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isSyncingAttendanceSummary, setIsSyncingAttendanceSummary] = useState(false);
   const [createAttendanceError, setCreateAttendanceError] = useState<string | null>(null);
   const [draftAttendanceByMemberId, setDraftAttendanceByMemberId] = useState<Record<string, AttendanceStatus | 'unmarked'>>({});
+  const [createAttendanceTab, setCreateAttendanceTab] = useState<CreateAttendanceTab>('ocr');
+  const [ocrRows, setOcrRows] = useState<OcrAttendanceRow[]>([]);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrSourceLabel, setOcrSourceLabel] = useState('');
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [selectedBossNames, setSelectedBossNames] = useState<string[]>([]);
   const [isBossDropdownOpen, setIsBossDropdownOpen] = useState(false);
   const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
@@ -55,6 +229,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [memberDetailsError, setMemberDetailsError] = useState<string | null>(null);
   const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
   const bossDropdownRef = useRef<HTMLDivElement | null>(null);
+  const ocrFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { members, loading: membersLoading, error: membersError } = useFirestoreMembers();
   const { bosses, loading: bossesLoading, error: bossesError } = useFirestoreBossInfo();
@@ -217,6 +392,86 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       .sort((first, second) => first.rank - second.rank);
         }, [members, recordsByMemberId, searchQuery, activeStatusFilter, canManage, isCreateAttendanceOpen, draftAttendanceByMemberId]);
 
+  const comparableMembers = useMemo(
+    () => members
+      .filter((member): member is typeof member & { id: string } => Boolean(member.id))
+      .map((member) => ({
+      ...member,
+      normalizedName: normalizeOcrName(member.name),
+      nameTokens: tokenizeOcrName(member.name),
+    })),
+    [members]
+  );
+
+  const comparableMembersByNormalizedName = useMemo(() => {
+    const nextMap = new Map<string, typeof comparableMembers>();
+
+    comparableMembers.forEach((member) => {
+      if (!member.normalizedName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedName) ?? [];
+      nextMap.set(member.normalizedName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [comparableMembers]);
+
+  const comparableMembersByToken = useMemo(() => {
+    const nextMap = new Map<string, typeof comparableMembers>();
+
+    comparableMembers.forEach((member) => {
+      member.nameTokens.forEach((token) => {
+        const existingMembers = nextMap.get(token) ?? [];
+        nextMap.set(token, [...existingMembers, member]);
+      });
+    });
+
+    return nextMap;
+  }, [comparableMembers]);
+
+  const ocrMemberFuse = useMemo(
+    () => new Fuse(comparableMembers, {
+      includeScore: true,
+      shouldSort: true,
+      threshold: 0.34,
+      ignoreLocation: true,
+      minMatchCharLength: 3,
+      keys: [
+        { name: 'name', weight: 0.7 },
+        { name: 'normalizedName', weight: 0.3 },
+      ],
+    }),
+    [comparableMembers]
+  );
+
+  const filteredOcrRows = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchedRows = ocrRows.filter(
+      (row) => row.status === 'matched'
+        && Boolean(row.matchedMemberId)
+        && draftAttendanceByMemberId[row.matchedMemberId as string] === 'present'
+    );
+    if (!normalizedSearch) return matchedRows;
+
+    return matchedRows.filter((row) => {
+      const matchedName = row.matchedMemberName?.toLowerCase() ?? '';
+      return matchedName.includes(normalizedSearch);
+    });
+  }, [ocrRows, searchQuery, draftAttendanceByMemberId]);
+
+  const matchedOcrMemberIds = useMemo(
+    () => Array.from(new Set(ocrRows.map((row) => row.matchedMemberId).filter((memberId): memberId is string => Boolean(memberId)))),
+    [ocrRows]
+  );
+
+  const ocrMatchSummary = useMemo(() => ({
+    matchedMembers: matchedOcrMemberIds.length,
+    detectedRows: ocrRows.length,
+    manualRows: comparableMembers.length,
+  }), [matchedOcrMemberIds, comparableMembers.length, ocrRows.length]);
+
   const handleAttendanceCheckboxChange = (
     memberId: string,
     _memberName: string,
@@ -232,6 +487,286 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }));
   };
 
+  const handleRemoveOcrAttendanceRow = (memberId: string, memberName: string) => {
+    const shouldRemove = window.confirm(`Remove ${memberName} from OCR attendance?`);
+    if (!shouldRemove) {
+      return;
+    }
+
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
+
+    setDraftAttendanceByMemberId((current) => ({
+      ...current,
+      [memberId]: 'unmarked',
+    }));
+    setOcrRows((current) => current.filter((row) => row.matchedMemberId !== memberId));
+  };
+
+  const closeCreateAttendanceModal = () => {
+    setIsCreateAttendanceOpen(false);
+    setIsBossDropdownOpen(false);
+    setCreateAttendanceError(null);
+    setCreateAttendanceTab('ocr');
+    setOcrRows([]);
+    setOcrError(null);
+    setOcrSourceLabel('');
+    setIsProcessingOcr(false);
+    if (ocrFileInputRef.current) {
+      ocrFileInputRef.current.value = '';
+    }
+  };
+
+  const findBestOcrMemberMatch = (candidateName: string, reservedMemberIds: Set<string>) => {
+    const normalizedCandidate = normalizeOcrName(candidateName);
+    if (!normalizedCandidate) return null;
+
+    const candidateTokens = tokenizeOcrName(candidateName);
+    const exactNormalizedMatches = (comparableMembersByNormalizedName.get(normalizedCandidate) ?? [])
+      .filter((member) => !reservedMemberIds.has(member.id));
+
+    if (exactNormalizedMatches.length === 1) {
+      return exactNormalizedMatches[0];
+    }
+
+    const exactTokenMatches = (comparableMembersByToken.get(normalizedCandidate) ?? [])
+      .filter((member) => !reservedMemberIds.has(member.id));
+
+    if (exactTokenMatches.length === 1) {
+      return exactTokenMatches[0];
+    }
+
+    const fuseResults = ocrMemberFuse.search(candidateName, { limit: 1 });
+    const bestFuseResult = fuseResults[0];
+
+    if (bestFuseResult && (bestFuseResult.score ?? 1) <= 0.34) {
+      if (reservedMemberIds.has(bestFuseResult.item.id)) {
+        return null;
+      }
+
+      return bestFuseResult.item;
+    }
+
+    let bestTokenMatch = null as (typeof comparableMembers)[number] | null;
+    let bestTokenScore = 0;
+
+    comparableMembers.forEach((member) => {
+      if (!member.normalizedName) return;
+
+      let score = 0;
+      if (normalizedCandidate === member.normalizedName) {
+        score = 1;
+      } else if (
+        normalizedCandidate.includes(member.normalizedName)
+        || member.normalizedName.includes(normalizedCandidate)
+      ) {
+        score = 0.92;
+      } else {
+        const sharedTokens = candidateTokens.filter((token) => member.nameTokens.includes(token)).length;
+        if (sharedTokens > 0) {
+          score = sharedTokens / Math.max(candidateTokens.length, member.nameTokens.length);
+        }
+      }
+
+      if (score > bestTokenScore) {
+        bestTokenScore = score;
+        bestTokenMatch = member;
+      }
+    });
+
+    if (bestTokenScore < 0.65 || !bestTokenMatch) {
+      return null;
+    }
+
+    if (reservedMemberIds.has(bestTokenMatch.id)) {
+      return null;
+    }
+
+    return bestTokenMatch;
+  };
+
+  const applyOcrTextToAttendance = (rawText: string, sourceLabel: string) => {
+    const candidates = extractOcrNameCandidates(rawText);
+    const seenRowKeys = new Set<string>();
+    const reservedMemberIds = new Set(
+      ocrRows
+        .map((row) => row.matchedMemberId)
+        .filter((memberId): memberId is string => Boolean(memberId))
+    );
+    const nextRows: OcrAttendanceRow[] = [];
+
+    candidates.forEach((candidateName, index) => {
+      const matchedMember = findBestOcrMemberMatch(candidateName, reservedMemberIds);
+      const rowKey = getOcrRowKey({
+        matchedMemberId: matchedMember?.id ?? null,
+        detectedName: candidateName,
+      });
+
+      if (!rowKey || seenRowKeys.has(rowKey)) {
+        return;
+      }
+
+      seenRowKeys.add(rowKey);
+      if (matchedMember?.id) {
+        reservedMemberIds.add(matchedMember.id);
+      }
+
+      nextRows.push({
+        id: `${index}-${normalizeOcrName(candidateName)}`,
+        detectedName: candidateName,
+        matchedMemberId: matchedMember?.id ?? null,
+        matchedMemberName: matchedMember?.name ?? null,
+        combatPower: matchedMember ? Number(matchedMember.combatPower || 0) : null,
+        multiplier: matchedMember ? getCombatPowerMultiplier(Number(matchedMember.combatPower || 0)) : null,
+        status: matchedMember ? 'matched' : 'unmatched',
+      });
+    });
+
+    setCreateAttendanceTab('ocr');
+
+    if (nextRows.length === 0) {
+      setOcrError('No names were detected from the provided image.');
+      return;
+    }
+
+    const existingRowKeys = new Set(ocrRows.map((row) => getOcrRowKey(row)).filter(Boolean));
+    const mergedRows = [...ocrRows];
+
+    nextRows.forEach((row) => {
+      const rowKey = getOcrRowKey(row);
+      if (!rowKey || existingRowKeys.has(rowKey)) {
+        return;
+      }
+
+      existingRowKeys.add(rowKey);
+      mergedRows.push(row);
+    });
+
+    setOcrSourceLabel((current) => {
+      if (!current || current === sourceLabel) {
+        return sourceLabel;
+      }
+
+      return 'Multiple images';
+    });
+    setOcrRows(mergedRows);
+
+    const matchedMemberIds = mergedRows
+      .map((row) => row.matchedMemberId)
+      .filter((memberId): memberId is string => Boolean(memberId));
+
+    setDraftAttendanceByMemberId((current) => {
+      const nextDraft = { ...current };
+      matchedMemberIds.forEach((memberId) => {
+        nextDraft[memberId] = 'present';
+      });
+      return nextDraft;
+    });
+
+    setOcrError(
+      matchedMemberIds.length > 0
+        ? null
+        : 'OCR completed, but none of the detected names matched the current member list.'
+    );
+  };
+
+  const processOcrImage = async (imageSource: Blob | File, sourceLabel: string) => {
+    setIsProcessingOcr(true);
+    setOcrError(null);
+    setCreateAttendanceError(null);
+
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setOcrError('You must be signed in as an admin to use OCR.');
+        setOcrRows([]);
+        return;
+      }
+
+      const idToken = await currentUser.getIdToken();
+      const imageDataUrl = await readBlobAsDataUrl(imageSource);
+
+      let result: OcrSpaceResponse | null = null;
+
+      try {
+        const response = await fetch(OCR_PROXY_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageDataUrl,
+            language: 'eng',
+          }),
+        });
+
+        const parsedResponse = await parseOcrResponse(response);
+        if (!response.ok) {
+          const fallbackMessage = parsedResponse.rawText.trim()
+            ? parsedResponse.rawText.trim().slice(0, 200)
+            : `OCR proxy request failed with status ${response.status}`;
+          throw new Error(parsedResponse.payload?.error || fallbackMessage);
+        }
+
+        if (!parsedResponse.payload) {
+          throw new Error(
+            OCR_PROXY_ENDPOINT === DEFAULT_OCR_PROXY_PATH
+              ? 'OCR proxy is unavailable on this server. Set VITE_OCR_PROXY_ENDPOINT or run the app through Firebase Hosting.'
+              : 'OCR proxy returned an empty response.'
+          );
+        }
+
+        result = parsedResponse.payload;
+      } catch (proxyError) {
+        if (!canUseDirectOcrSpaceFallback()) {
+          throw proxyError;
+        }
+
+        result = await requestOcrViaDirectApi(imageDataUrl);
+      }
+
+      if (result.IsErroredOnProcessing) {
+        const errorMessage = Array.isArray(result.ErrorMessage)
+          ? result.ErrorMessage.join(' ')
+          : result.ErrorMessage;
+        throw new Error(errorMessage || result.ErrorDetails || 'OCR.space failed to process the image.');
+      }
+
+      const parsedText = (result.ParsedResults ?? [])
+        .map((entry) => entry.ParsedText || '')
+        .join('\n');
+
+      applyOcrTextToAttendance(parsedText, sourceLabel);
+    } catch (ocrProcessingError) {
+      console.error('Failed to process OCR image:', ocrProcessingError);
+      setOcrError(getOcrErrorMessage(ocrProcessingError));
+      setOcrRows([]);
+    } finally {
+      setIsProcessingOcr(false);
+    }
+  };
+
+  const handleOcrFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+
+    await processOcrImage(selectedFile, selectedFile.name);
+    event.target.value = '';
+  };
+
+  const handleOcrPaste = async (event: ClipboardEvent<HTMLDivElement>) => {
+    const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    const imageFile = imageItem.getAsFile();
+    if (!imageFile) return;
+
+    event.preventDefault();
+    await processOcrImage(imageFile, 'Pasted image');
+  };
+
   const clearAllAttendance = async () => {
     if (!canManage) return;
 
@@ -240,6 +775,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }
 
     setIsClearingAll(true);
+    setOcrRows([]);
+    setOcrError(null);
+    setOcrSourceLabel('');
+    if (ocrFileInputRef.current) {
+      ocrFileInputRef.current.value = '';
+    }
     setDraftAttendanceByMemberId((current) => {
       const nextDraft = { ...current };
       members
@@ -301,6 +842,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setSearchQuery('');
     setStatusFilter('all');
     setDraftAttendanceByMemberId({});
+    setCreateAttendanceTab('ocr');
+    setOcrRows([]);
+    setOcrError(null);
+    setOcrSourceLabel('');
   };
 
   const closeResetAttendanceConfirm = () => {
@@ -414,6 +959,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       return;
     }
 
+    const selectedAttendancePoints = getAttendancePointsForBossSelection(
+      attendanceType,
+      selectedBossesToPersist
+    );
+
     try {
       setCreateAttendanceError(null);
       setIsSavingAttendanceData(true);
@@ -436,13 +986,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         await syncPresentMembersToSummary(
           attendanceType,
           presentMembersForSummary,
-          selectedBossesToPersist.length
+          selectedAttendancePoints
         );
       }
 
       setIsCreateAttendanceOpen(false);
-      setIsBossDropdownOpen(false);
-      setCreateAttendanceError(null);
+      closeCreateAttendanceModal();
     } catch (error) {
       console.error('Failed to sync attendance summary:', error);
     } finally {
@@ -463,9 +1012,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
   const loading = membersLoading || attendanceLoading || summaryLoading || bossesLoading || guildInfoLoading;
   const pageError = membersError || attendanceError || summaryError || bossesError || guildInfoError;
-  const isClearAllDisabled = isClearingAll || loading;
   const isSaveAttendanceDisabled =
     isClearingAll || loading || isSyncingAttendanceSummary || isSavingAttendanceData;
+  const displayedAttendancePoints = isCreateAttendanceOpen
+    ? getAttendancePointsForBossSelection(attendanceType, selectedBossNames)
+    : getAttendancePoints(attendanceType, bossName);
   const totalFund = guildInfo?.totalFund ?? 0;
   const attendancePercentage = totalFund * 0.9;
   const managementPercentage = totalFund * 0.1;
@@ -477,13 +1028,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         const normalizedName = member.name.trim().toLowerCase();
         const combatPower = Number(member.combatPower || 0);
 
-        const computedMultiplier = combatPower >= 100000
-          ? 2.5
-          : combatPower >= 90000
-            ? 2.0
-            : combatPower >= 80000
-              ? 1.5
-              : 1.0;
+        const computedMultiplier = getCombatPowerMultiplier(combatPower);
 
         return [normalizedName, computedMultiplier] as const;
       })
@@ -547,22 +1092,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     return summaryRowsComputed.filter((row) => row.name.toLowerCase().includes(normalizedSearch));
   }, [summaryRowsComputed, manageSearchQuery]);
-
-  const zeroAttendanceMembers = useMemo(() => {
-    const totalAttendanceByName = new Map(
-      summaryRowsComputed.map((row) => [row.name.trim().toLowerCase(), Number(row.computedTotalAttendance || 0)] as const)
-    );
-
-    return members
-      .filter((member) => {
-        const normalizedName = member.name.trim().toLowerCase();
-        if (!normalizedName) return false;
-
-        const totalAttendance = totalAttendanceByName.get(normalizedName) ?? 0;
-        return totalAttendance <= 0;
-      })
-      .sort((first, second) => first.rank - second.rank);
-  }, [members, summaryRowsComputed]);
+  const isResetAttendanceDisabled = isClearingAll || loading || manageSummaryRowsComputed.length === 0;
+  const hasDraftAttendanceSelections = useMemo(
+    () => Object.values(draftAttendanceByMemberId).some((status) => status !== 'unmarked'),
+    [draftAttendanceByMemberId]
+  );
+  const isModalClearAllDisabled = isClearingAll || loading || (!hasDraftAttendanceSelections && ocrRows.length === 0);
 
   const startMetricEdit = (currentValue: number) => {
     setEditingMetric('totalFund');
@@ -669,19 +1204,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return datePart || '-';
   };
 
-  const getCombatPowerMultiplier = (combatPower: number): number => {
-    if (combatPower >= 100000) return 2.5;
-    if (combatPower >= 90000) return 2.0;
-    if (combatPower >= 80000) return 1.5;
-    return 1.0;
-  };
-
-  const getBaseAttendancePoints = (selectedAttendanceType: string): number => {
-    if (selectedAttendanceType === 'Kransia') return 10;
-    if (selectedAttendanceType === 'Guild Boss') return 2;
-    return 1;
-  };
-
   const deleteAttendanceDetail = async (attendance: {
     id: string;
     attendanceType: string;
@@ -738,7 +1260,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               </td>
               <td className="member-name">{member.name}</td>
               <td className="member-date member-combat-power">{Number(member.combatPower || 0).toLocaleString()}</td>
-              <td className="member-date member-pts">{getBaseAttendancePoints(attendanceType)}</td>
+              <td className="member-date member-pts">{displayedAttendancePoints}</td>
               <td className="member-date member-multiplier">{getCombatPowerMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
               <td className="member-date">{selectedDate}</td>
               <td className="member-status">
@@ -901,6 +1423,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
           <div className="attendance-toolbar attendance-toolbar-below-metrics">
             <div className="attendance-guest-search-box attendance-manage-search-box">
+              <span className="attendance-guest-search-icon" aria-hidden="true">
+                <Search size={14} strokeWidth={1.9} />
+              </span>
               <input
                 type="text"
                 className="attendance-guest-search-input attendance-manage-search-input"
@@ -920,18 +1445,31 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 </button>
               )}
             </div>
-            <button className="reset-attendance-btn" onClick={openResetAttendanceConfirm}>
-              Reset Attendance
+            <button
+              type="button"
+              className="reset-attendance-btn"
+              onClick={openResetAttendanceConfirm}
+              title="Reset Attendance"
+              aria-label="Reset Attendance"
+              disabled={isResetAttendanceDisabled}
+            >
+              <CloudBackup size={16} strokeWidth={1.8} />
             </button>
             <button
+              type="button"
               className="create-attendance-btn"
               onClick={() => {
                 setCreateAttendanceError(null);
+                setCreateAttendanceTab('ocr');
+                setOcrRows([]);
+                setOcrError(null);
+                setOcrSourceLabel('');
                 setIsCreateAttendanceOpen(true);
               }}
+              title="Create Attendance"
+              aria-label="Create Attendance"
             >
               <Plus size={16} strokeWidth={1.8} />
-              Create Attendance
             </button>
           </div>
 
@@ -1069,44 +1607,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         </div>
       )}
 
-      <div className="attendance-table-container attendance-zero-summary">
-        <div className="attendance-zero-summary-header">
-          <h3>Members with 0 Attendance</h3>
-          <span className="attendance-zero-summary-count">{zeroAttendanceMembers.length} total</span>
-        </div>
-
-        <table className="attendance-table">
-          <thead>
-            <tr>
-              <th>No.</th>
-              <th>Name</th>
-              <th className="col-combat-power">Combat Power</th>
-              <th className="col-zero-multiplier">Multiplier</th>
-              <th className="col-zero-total-pts">Total Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {zeroAttendanceMembers.map((member, index) => (
-              <tr key={member.id || `${member.name}-${member.rank}`}>
-                <td className="member-rank">{index + 1}</td>
-                <td className="member-name">{member.name}</td>
-                <td className="member-date member-combat-power">{Number(member.combatPower || 0).toLocaleString()}</td>
-                <td className="member-date member-zero-multiplier">{getCombatPowerMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
-                <td className="member-date member-zero-total-pts">0</td>
-              </tr>
-            ))}
-
-            {!loading && zeroAttendanceMembers.length === 0 && (
-              <tr>
-                <td colSpan={5} className="attendance-empty-row">
-                  No members with zero attendance.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
       {canManage && isResetAttendanceConfirmOpen && (
         <div className="attendance-modal-overlay" onClick={closeResetAttendanceConfirm}>
           <div className="attendance-modal-content attendance-reset-confirm-modal" onClick={(event) => event.stopPropagation()}>
@@ -1178,22 +1678,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       {canManage && isCreateAttendanceOpen && (
         <div
           className="attendance-modal-overlay"
-          onClick={() => {
-            setIsCreateAttendanceOpen(false);
-            setIsBossDropdownOpen(false);
-            setCreateAttendanceError(null);
-          }}
+          onClick={closeCreateAttendanceModal}
         >
           <div className="attendance-modal-content" onClick={(event) => event.stopPropagation()}>
             <div className="attendance-modal-header">
               <h3>Create Attendance</h3>
               <button
                 className="attendance-modal-close"
-                onClick={() => {
-                  setIsCreateAttendanceOpen(false);
-                  setIsBossDropdownOpen(false);
-                  setCreateAttendanceError(null);
-                }}
+                onClick={closeCreateAttendanceModal}
                 aria-label="Close"
               >
                 ×
@@ -1303,18 +1795,161 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
-            {!forceDashBossName && bossNameOptions.length > 0 && (
-              <p className="filter-select-hint">Select multiple bosses using the checkboxes.</p>
-            )}
+            <div className="attendance-create-tabs" role="tablist" aria-label="Attendance mode">
+              <button
+                type="button"
+                role="tab"
+                className={`attendance-create-tab ${createAttendanceTab === 'ocr' ? 'active' : ''}`}
+                aria-selected={createAttendanceTab === 'ocr'}
+                onClick={() => setCreateAttendanceTab('ocr')}
+              >
+                <span className="attendance-create-tab-title">OCR Attendance</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`attendance-create-tab ${createAttendanceTab === 'manual' ? 'active' : ''}`}
+                aria-selected={createAttendanceTab === 'manual'}
+                onClick={() => setCreateAttendanceTab('manual')}
+              >
+                <span className="attendance-create-tab-title">Manual Attendance</span>
+              </button>
+            </div>
 
-            {memberAttendanceTable}
+            {createAttendanceTab === 'ocr' ? (
+              <div className="attendance-ocr-panel">
+                <input
+                  ref={ocrFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="attendance-ocr-file-input"
+                  onChange={handleOcrFileChange}
+                />
+
+                <div
+                  className="attendance-ocr-paste-zone"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Paste OCR image here"
+                  onPaste={handleOcrPaste}
+                  onClick={(event) => event.currentTarget.focus()}
+                >
+                  <div className="attendance-ocr-paste-icons" aria-hidden="true">
+                    <span className="attendance-ocr-paste-icon-card">
+                      <Clipboard size={22} strokeWidth={1.9} />
+                    </span>
+                    <span className="attendance-ocr-paste-icon-card accent">
+                      <ImageUp size={20} strokeWidth={1.9} />
+                    </span>
+                  </div>
+
+                  <p>Click this area, then paste your screenshot here.</p>
+                  <span>New pasted images are added to the OCR results table instead of replacing the current data.</span>
+
+                  <button
+                    type="button"
+                    className="attendance-ocr-inline-upload-btn"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      ocrFileInputRef.current?.click();
+                    }}
+                    disabled={isProcessingOcr}
+                  >
+                    Upload image
+                  </button>
+
+                  <span className="attendance-ocr-paste-hint">Supported file types: PNG, JPG, JPEG, WEBP</span>
+                </div>
+
+                {(isProcessingOcr || ocrError || ocrSourceLabel) && (
+                  <div className="attendance-ocr-feedback">
+                    {isProcessingOcr && (
+                      <p className="attendance-ocr-status">
+                        Reading image... <Loader size={14} strokeWidth={1.8} />
+                      </p>
+                    )}
+                    {ocrError && <p className="attendance-ocr-error">{ocrError}</p>}
+                    {ocrSourceLabel && !isProcessingOcr && (
+                      <p className="attendance-ocr-source">Source: {ocrSourceLabel}</p>
+                    )}
+                    {!isProcessingOcr && ocrRows.length > 0 && (
+                      <p className="attendance-ocr-counter">
+                        Showing {filteredOcrRows.length} matched names from {ocrMatchSummary.detectedRows} detected names against {ocrMatchSummary.manualRows} members.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="attendance-table-container attendance-ocr-table-container">
+                  <table className="attendance-table attendance-ocr-table">
+                    <thead>
+                      <tr>
+                        <th>No.</th>
+                        <th>Member Name</th>
+                        <th className="col-combat-power">Combat Power</th>
+                        <th className="col-pts">PTS</th>
+                        <th className="col-multiplier">Multiplier</th>
+                        <th className="col-status">Status</th>
+                        <th className="col-action">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOcrRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td className="member-rank">{index + 1}</td>
+                          <td className="member-name">{row.matchedMemberName ?? 'No match'}</td>
+                          <td className="member-date member-combat-power">
+                            {row.combatPower !== null ? row.combatPower.toLocaleString() : '—'}
+                          </td>
+                          <td className="member-date member-pts">{displayedAttendancePoints}</td>
+                          <td className="member-date member-multiplier">
+                            {row.multiplier !== null ? row.multiplier.toFixed(1) : '—'}
+                          </td>
+                          <td className="member-status">
+                            <span className={`attendance-ocr-status-badge attendance-ocr-status-${row.status}`}>
+                              {row.status === 'matched' ? 'Present' : 'Unmatched'}
+                            </span>
+                          </td>
+                          <td className="member-action">
+                            {row.matchedMemberId && (
+                              <button
+                                type="button"
+                                className="details-delete-btn attendance-ocr-remove-btn"
+                                onClick={() => handleRemoveOcrAttendanceRow(row.matchedMemberId as string, row.matchedMemberName ?? 'this member')}
+                                aria-label={`Remove ${row.matchedMemberName ?? 'member'} from OCR attendance`}
+                                title="Remove from OCR attendance"
+                              >
+                                <X className="details-delete-icon" size={16} strokeWidth={2.2} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {!isProcessingOcr && filteredOcrRows.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="attendance-empty-row">
+                            Upload or paste an attendance screenshot to extract member names.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="attendance-ocr-reminder-note">
+                  Reminder: Double check whether names with 3 letters are included correctly in the OCR read.
+                </p>
+              </div>
+            ) : (
+              memberAttendanceTable
+            )}
 
             <div className="attendance-modal-footer">
               <div className="attendance-modal-footer-left">
                 <button
                   className="action-btn action-btn-muted clear-all-btn"
                   onClick={clearAllAttendance}
-                  disabled={isClearAllDisabled}
+                  disabled={isModalClearAllDisabled}
                 >
                   {isClearingAll ? 'Clearing...' : 'Clear All'}
                 </button>
@@ -1387,7 +2022,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         <td className="details-cell-number">{index + 1}</td>
                         <td className="details-cell-type">{attendance.attendanceType}</td>
                         <td className="details-cell-boss">{attendance.bossName}</td>
-                        <td className="details-cell-pts">{getBaseAttendancePoints(attendance.attendanceType)}</td>
+                        <td className="details-cell-pts">
+                          {getAttendancePoints(attendance.attendanceType, attendance.bossName)}
+                        </td>
                         <td className="details-cell-multiplier">{Number(attendance.multiplier || 1).toFixed(1)}</td>
                         <td className="details-cell-date">{formatAttendanceDateOnly(attendance.attendanceDate)}</td>
                         <td className="details-cell-status">{getStatusBadge(attendance.status)}</td>

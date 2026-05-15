@@ -67,17 +67,35 @@ cp .env.example .env.local
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 - `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_OCR_PROXY_ENDPOINT` (optional; defaults to `/api/ocr-space` when Firebase Hosting rewrites are used)
 
-3. Validate before deploy:
+3. Configure the OCR secret for the Firebase function instead of the frontend bundle:
+
+```bash
+firebase functions:secrets:set OCR_SPACE_API_KEY
+```
+
+4. Deploy the function and hosting rewrite:
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only functions,hosting
+```
+
+The OCR proxy only accepts signed-in users whose `admins/{uid}` Firestore document exists and has `enabled: true`.
+
+5. Validate before deploy:
 
 ```bash
 npm run lint
 npm run build
 ```
 
-4. Apply strict Firestore rules from [firestore.rules](firestore.rules) and deploy them with Firebase CLI.
-5. Ensure admin users have Firebase custom claim `role: "admin"` (set via Firebase Admin SDK), or write operations will be denied.
-6. After hardening, non-admin users are denied Firestore reads and writes by server rules.
+6. Apply strict Firestore rules from [firestore.rules](firestore.rules) and deploy them with Firebase CLI.
+7. Ensure each admin user has a matching Firestore document in `admins/{uid}` with `enabled: true`, or login and OCR access will be denied.
+8. After hardening, non-admin users are denied Firestore reads and writes by server rules.
 
 ## Technologies Used
 
@@ -136,51 +154,7 @@ The dashboard is fully responsive and works well on:
 - Guild events calendar
 - In-game economy tracker
 - Chat/messaging system
-- Admin panel for guild management
 
 ## License
 
 Copyright © 2026 Secreta Guild
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```

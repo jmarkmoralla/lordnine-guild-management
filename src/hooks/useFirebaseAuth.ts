@@ -9,6 +9,7 @@ import type { User } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
 
 const INSUFFICIENT_ROLE_CODE = 'auth/insufficient-role';
+const DISABLED_ADMIN_CODE = 'auth/disabled-admin';
 
 interface AuthState {
   user: User | null;
@@ -34,14 +35,17 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     let isMounted = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      const isAdmin = user ? await hasAdminRole(user) : false;
+      const adminAccess = user ? await getAdminAccess(user) : {
+        isAdmin: false,
+        isEnabled: false,
+      };
       if (!isMounted) return;
 
       setAuthState({
         user,
         loading: false,
         error: null,
-        isAdmin,
+        isAdmin: adminAccess.isAdmin,
       });
     });
 
@@ -57,12 +61,21 @@ export const useFirebaseAuth = (): AuthContextReturn => {
       await signInWithEmailAndPassword(auth, email, password);
 
       const currentUser = auth.currentUser;
-      const isAdmin = currentUser ? await hasAdminRole(currentUser) : false;
-      if (!isAdmin) {
+      const adminAccess = currentUser ? await getAdminAccess(currentUser) : {
+        isAdmin: false,
+        isEnabled: false,
+      };
+      if (!adminAccess.isAdmin) {
         await signOut(auth);
-        const insufficientRoleError = new Error('This account does not have the admin role.') as Error & { code: string };
-        insufficientRoleError.code = INSUFFICIENT_ROLE_CODE;
-        throw insufficientRoleError;
+        const authRoleError = new Error(
+          !adminAccess.isEnabled
+            ? 'This admin account is disabled.'
+            : 'This account does not have admin access.'
+        ) as Error & { code: string };
+        authRoleError.code = !adminAccess.isEnabled
+          ? DISABLED_ADMIN_CODE
+          : INSUFFICIENT_ROLE_CODE;
+        throw authRoleError;
       }
 
       setAuthState((prev) => ({ ...prev, loading: false }));
@@ -107,6 +120,7 @@ function getErrorMessage(code: string): string {
     'auth/too-many-requests': 'Too many login attempts. Please try again later.',
     'auth/operation-not-allowed': 'Authentication method is not enabled in Firebase.',
     'auth/admin-restricted-operation': 'This action is restricted. Create the user in Firebase Console or enable email/password sign-up.',
+    'auth/disabled-admin': 'This admin account is disabled.',
     'auth/insufficient-role': 'This account does not have the admin role.',
   };
 
@@ -123,16 +137,21 @@ function normalizeAuthError(err: unknown): { code: string; message: string } {
   return { code: 'auth/unknown', message: String(err) };
 }
 
-async function hasAdminRole(user: User): Promise<boolean> {
+async function getAdminAccess(user: User): Promise<{ isAdmin: boolean; isEnabled: boolean }> {
   if (user.isAnonymous) {
-    return false;
+    return { isAdmin: false, isEnabled: false };
   }
 
   try {
     const adminDocRef = doc(db, 'admins', user.uid);
     const adminDoc = await getDoc(adminDocRef);
-    return adminDoc.exists();
+    if (!adminDoc.exists()) {
+      return { isAdmin: false, isEnabled: false };
+    }
+
+    const isEnabled = adminDoc.data()?.enabled === true;
+    return { isAdmin: isEnabled, isEnabled };
   } catch {
-    return false;
+    return { isAdmin: false, isEnabled: false };
   }
 }

@@ -7,16 +7,16 @@ service cloud.firestore {
 
     function isAdminUser() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
     }
 
     match /admins/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
-      allow write: if false;
+      allow read: if isAdminUser() && request.auth.uid == uid;
     }
 
     match /{document=**} {
-      allow read, write: if isAdminUser();
+      allow read, write: if isAdminUser() && !document.matches('admins/.*');
     }
   }
 }
