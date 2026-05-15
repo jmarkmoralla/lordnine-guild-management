@@ -54,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
             <img src="/assets/images/lordnine_logo.png" alt="Lordnine Logo" className="guild-logo-image" />
           </div>
           <div className="guild-info-section">
-            <h1 className="guild-name">Secreta</h1>
+            <h1 className="guild-name">Santiago 2</h1>
             <p className="guild-subtitle">Guild Management</p>
           </div>
         </div>

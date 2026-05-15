@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Award, Crown, Loader, Pencil, Plus, Trophy, Trash2, Users, X } from 'lucide-react';
+import { Award, Crown, Loader, Pencil, Plus, Search, Trophy, Trash2, Users, X } from 'lucide-react';
+import '../styles/Attendance.css';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
+import { getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
 import { DEFAULT_MEMBER_CLASS, MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
 
 interface MemberRanking {
@@ -53,13 +55,6 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       default:
         return null;
     }
-  };
-
-  const getCombatPowerMultiplier = (combatPower: number): number => {
-    if (combatPower >= 100000) return 2.5;
-    if (combatPower >= 90000) return 2.0;
-    if (combatPower >= 80000) return 1.5;
-    return 1.0;
   };
 
   const [newMember, setNewMember] = useState<MemberRanking>({
@@ -176,7 +171,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
           </div>
           <div className="members-stat-content">
             <h3>Guild Members</h3>
-            <p className="members-stat-value">{members.length}/50</p>
+            <p className="members-stat-value">{members.length}</p>
           </div>
         </div>
 
@@ -209,18 +204,39 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
         </div>
       </div>
 
-      <div className="rankings-filters">
-        <button className="refresh-btn-filter" onClick={openAddModal}>
+      <div className="rankings-filters members-toolbar">
+        <div className="attendance-guest-search-box attendance-manage-search-box" role="search">
+          <span className="attendance-guest-search-icon" aria-hidden="true">
+            <Search size={14} strokeWidth={1.9} />
+          </span>
+          <input
+            type="text"
+            className="attendance-guest-search-input attendance-manage-search-input"
+            placeholder="Search member..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Search member"
+          />
+          {searchQuery.trim().length > 0 && (
+            <button
+              type="button"
+              className="attendance-guest-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              <X size={14} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          className="refresh-btn-filter icon-only"
+          onClick={openAddModal}
+          title="Add Member"
+          aria-label="Add Member"
+        >
           <Plus size={16} strokeWidth={1.8} />
-          Add Member
         </button>
-        <input
-          type="text"
-          className="filter-input members-search-input"
-          placeholder="Search member..."
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-        />
       </div>
 
       {loading && (
@@ -332,14 +348,14 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
 
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content add-member-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add Member</h3>
               <button className="modal-close" onClick={() => setShowAddModal(false)} aria-label="Close">
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body add-member-modal-body">
               <div className="form-group">
                 <label>Name</label>
                 <input
@@ -417,14 +433,14 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
 
       {editingMember && (
         <div className="modal-overlay" onClick={() => setEditingMember(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content add-member-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Edit Member</h3>
               <button className="modal-close" onClick={() => setEditingMember(null)} aria-label="Close">
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body add-member-modal-body">
               <div className="form-group">
                 <label>Name</label>
                 <input

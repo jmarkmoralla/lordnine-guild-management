@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { getAttendancePoints } from '../utils/attendancePoints.ts';
 
 export interface GuildAttendanceSummary {
   id: string;
@@ -22,7 +23,7 @@ interface UseFirestoreAttendanceSummaryReturn {
   syncPresentMembersToSummary: (
     attendanceType: string,
     presentMembers: Array<{ name: string; multiplier: number }>,
-    selectedBossCount?: number
+    attendancePoints?: number
   ) => Promise<void>;
   refreshSummaryForMember: (memberName: string) => Promise<void>;
 }
@@ -33,13 +34,6 @@ export interface SummaryEditableFields {
   guildBoss: number;
   guildvsguild: number;
 }
-
-const ATTENDANCE_POINTS: Readonly<Record<keyof SummaryEditableFields, number>> = {
-  kransia: 10,
-  fieldBoss: 1,
-  guildBoss: 2,
-  guildvsguild: 1,
-};
 
 const normalizeAttendanceType = (attendanceType: string) => attendanceType.trim().toLowerCase();
 
@@ -138,15 +132,15 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
   const syncPresentMembersToSummary = async (
     attendanceType: string,
     presentMembers: Array<{ name: string; multiplier: number }>,
-    selectedBossCount = 1
+    attendancePoints = getAttendancePoints(attendanceType)
   ) => {
     const targetField = getSummaryFieldByAttendanceType(attendanceType);
     if (!targetField) return;
 
-    const normalizedSelectedBossCount = Number(selectedBossCount);
-    const effectiveSelectedBossCount = Number.isFinite(normalizedSelectedBossCount) && normalizedSelectedBossCount > 0
-      ? normalizedSelectedBossCount
-      : 1;
+    const normalizedAttendancePoints = Number(attendancePoints);
+    const effectiveAttendancePoints = Number.isFinite(normalizedAttendancePoints) && normalizedAttendancePoints > 0
+      ? normalizedAttendancePoints
+      : getAttendancePoints(attendanceType);
 
     const existingByName = new Map(summaryRows.map((row) => [row.name.trim().toLowerCase(), row]));
     const batch = writeBatch(db);
@@ -159,7 +153,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
         ? normalizedMultiplier
         : 1;
-      const attendancePoints = ATTENDANCE_POINTS[targetField] * effectiveMultiplier * effectiveSelectedBossCount;
+      const weightedAttendancePoints = effectiveAttendancePoints * effectiveMultiplier;
 
       const existing = existingByName.get(normalizedName);
 
@@ -171,7 +165,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
           guildvsguild: existing.guildvsguild,
         };
 
-        nextValues[targetField] += attendancePoints;
+        nextValues[targetField] += weightedAttendancePoints;
         const nextTotalAttendance = computeTotalPoints(nextValues);
 
         batch.set(
@@ -194,7 +188,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         guildBoss: 0,
         guildvsguild: 0,
       };
-      initialValues[targetField] = attendancePoints;
+      initialValues[targetField] = weightedAttendancePoints;
 
       batch.set(
         doc(db, 'guildAttendanceSummary', sanitizeSummaryDocId(memberName)),
@@ -233,7 +227,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     };
 
     attendanceSnapshot.docs.forEach((attendanceDoc) => {
-      const data = attendanceDoc.data() as { attendanceType?: string; multiplier?: number };
+      const data = attendanceDoc.data() as { attendanceType?: string; bossName?: string; multiplier?: number };
       const targetField = getSummaryFieldByAttendanceType(data.attendanceType || '');
       if (!targetField) return;
 
@@ -241,7 +235,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
         ? normalizedMultiplier
         : 1;
-      nextValues[targetField] += ATTENDANCE_POINTS[targetField] * effectiveMultiplier;
+      nextValues[targetField] += getAttendancePoints(data.attendanceType || '', data.bossName || '') * effectiveMultiplier;
     });
 
     const totalAttendance = computeTotalPoints(nextValues);

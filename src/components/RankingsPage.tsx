@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Award, Loader } from 'lucide-react';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
+import { COMBAT_POWER_MULTIPLIER_TIERS, getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
 import { getMemberClassIconPath } from '../utils/memberClass';
 
 const RankingsPage: React.FC = () => {
@@ -9,20 +10,6 @@ const RankingsPage: React.FC = () => {
   const [copiedWalletMemberId, setCopiedWalletMemberId] = useState<string | null>(null);
 
   const rankedMembers = [...members].sort((a, b) => b.combatPower - a.combatPower);
-
-  const getCombatPowerMultiplier = (combatPower: number): number => {
-    if (combatPower >= 100000) return 2.5;
-    if (combatPower >= 90000) return 2.0;
-    if (combatPower >= 80000) return 1.5;
-    return 1.0;
-  };
-
-  const multiplierTiers = [
-    { id: 'tier-1' as const, label: '>= 100,000', multiplier: 2.5 },
-    { id: 'tier-2' as const, label: '90,000 – 99,999', multiplier: 2.0 },
-    { id: 'tier-3' as const, label: '80,000 – 89,999', multiplier: 1.5 },
-    { id: 'tier-4' as const, label: '<= 79,999', multiplier: 1.0 },
-  ];
 
   const handleWalletAddressClick = async (memberId: string, walletAddress: string) => {
     if (!walletAddress.trim()) return;
@@ -71,43 +58,21 @@ const RankingsPage: React.FC = () => {
       )}
 
       {!loading && members.length > 0 && (
-        <div className="rankings-stats">
-          <h3>Summary</h3>
-          <div className="summary-grid">
-            <div className="summary-card">
-              <span className="summary-title">Highest Combat Power</span>
-              <span className="summary-value">{members[0].combatPower.toLocaleString()}</span>
-            </div>
-            <div className="summary-card">
-              <span className="summary-title">Average Combat Power</span>
-              <span className="summary-value">
-                {Math.round(
-                  members.reduce((sum, m) => sum + m.combatPower, 0) / members.length
-                ).toLocaleString()}
-              </span>
-            </div>
-            <div className="summary-card">
-              <span className="summary-title">Total Members</span>
-              <span className="summary-value">{members.length}/50</span>
-            </div>
+        <section className="multiplier-legend" aria-labelledby="multiplier-legend-heading">
+          <h4 id="multiplier-legend-heading">Multiplier Legend (Combat Power)</h4>
+          <div className="multiplier-legend-grid" role="list" aria-label="Multiplier tiers">
+            {COMBAT_POWER_MULTIPLIER_TIERS.map((tier) => (
+              <div
+                key={tier.id}
+                role="listitem"
+                className="multiplier-legend-tier"
+              >
+                <span className="multiplier-legend-tier-range">{tier.label}</span>
+                <span className="multiplier-legend-tier-value">{tier.multiplier.toFixed(1)}</span>
+              </div>
+            ))}
           </div>
-
-          <div className="multiplier-legend">
-            <h4>Multiplier Legend</h4>
-            <div className="multiplier-legend-grid" role="list" aria-label="Multiplier tiers">
-              {multiplierTiers.map((tier) => (
-                <div
-                  key={tier.id}
-                  role="listitem"
-                  className="multiplier-legend-tier"
-                >
-                  <span className="multiplier-legend-tier-range">{tier.label}</span>
-                  <span className="multiplier-legend-tier-value">{tier.multiplier.toFixed(1)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        </section>
       )}
 
       <div className="rankings-table-container">
