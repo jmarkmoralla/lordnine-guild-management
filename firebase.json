@@ -20,6 +20,30 @@
         "function": "ocrSpaceProxy"
       },
       {
+        "source": "/api/listAdmins",
+        "function": "listAdmins"
+      },
+      {
+        "source": "/api/createAdmin",
+        "function": "createAdmin"
+      },
+      {
+        "source": "/api/updateAdminRole",
+        "function": "updateAdminRole"
+      },
+      {
+        "source": "/api/updateAdminProfile",
+        "function": "updateAdminProfile"
+      },
+      {
+        "source": "/api/disableAdmin",
+        "function": "disableAdmin"
+      },
+      {
+        "source": "/api/deleteAdmin",
+        "function": "deleteAdmin"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

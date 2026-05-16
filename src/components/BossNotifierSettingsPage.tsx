@@ -41,6 +41,11 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
     [bossSearchQuery, sortedBosses]
   );
 
+  const selectedBosses = useMemo(() => {
+    const selectedIds = new Set(enabledBossIds);
+    return bosses.filter((boss) => boss.id && selectedIds.has(boss.id));
+  }, [bosses, enabledBossIds]);
+
   const toggleBoss = (bossId: string) => {
     setEnabledBossIds((currentIds) => {
       if (currentIds.includes(bossId)) {
@@ -67,7 +72,6 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
         return;
       }
 
-      const selectedBosses = bosses.filter((boss) => boss.id && enabledBossIds.includes(boss.id));
       if (selectedBosses.length === 0) {
         setSaveMessage('Failed to send: Select at least one boss.');
         return;
@@ -190,7 +194,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
             <h3>Selected Bosses</h3>
             <p>Only selected bosses scheduled on the target date are included in Discord notifications</p>
           </div>
-          <span className="notifier-count-badge">{enabledBossIds.length} selected</span>
+          <span className="notifier-count-badge">{selectedBosses.length} selected</span>
         </div>
 
         <div className="notifier-boss-search-box" role="search">
@@ -244,7 +248,7 @@ const BossNotifierSettingsPage: React.FC<BossNotifierSettingsPageProps> = ({ use
         <button
           className="refresh-btn-filter notifier-save-btn"
           onClick={handleSendNotification}
-          disabled={saving || !discordWebhookUrl.trim() || !manualNotificationDate || enabledBossIds.length === 0}
+          disabled={saving || !discordWebhookUrl.trim() || !manualNotificationDate || selectedBosses.length === 0}
         >
           {saving ? <Loader size={16} strokeWidth={1.8} /> : <Send size={16} strokeWidth={1.8} />}
           Send Notification

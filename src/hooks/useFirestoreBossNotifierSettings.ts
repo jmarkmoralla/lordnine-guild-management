@@ -37,6 +37,14 @@ const DEFAULT_SETTINGS: BossNotifierSettings = {
   updatedAt: '',
 };
 
+const normalizeEnabledBossIds = (enabledBossIds: unknown): string[] => {
+  if (!Array.isArray(enabledBossIds)) {
+    return [];
+  }
+
+  return [...new Set(enabledBossIds.filter((id): id is string => typeof id === 'string'))];
+};
+
 const normalizeSettings = (raw: Partial<BossNotifierSettings> | undefined): BossNotifierSettings => {
   const normalizedScheduleMode = raw?.scheduleMode === 'manual' ? 'manual' : 'auto';
   const normalizedNotificationTime = raw?.notificationTime ?? '09:00';
@@ -53,9 +61,7 @@ const normalizeSettings = (raw: Partial<BossNotifierSettings> | undefined): Boss
     notificationTime: normalizedNotificationTime,
     manualNotificationDate: raw?.manualNotificationDate ?? '',
     manualNotificationTime: raw?.manualNotificationTime ?? '',
-    enabledBossIds: Array.isArray(raw?.enabledBossIds)
-      ? raw.enabledBossIds.filter((id): id is string => typeof id === 'string')
-      : [],
+    enabledBossIds: normalizeEnabledBossIds(raw?.enabledBossIds),
     lastNotifiedDate: normalizedLastNotifiedDate,
     lastNotifiedScheduleKey: normalizedScheduleKey,
     updatedAt: raw?.updatedAt ?? '',
@@ -91,6 +97,7 @@ export const useFirestoreBossNotifierSettings = (): UseFirestoreBossNotifierSett
       const payload: BossNotifierSettings = {
         ...settings,
         ...updates,
+        enabledBossIds: normalizeEnabledBossIds(updates.enabledBossIds ?? settings.enabledBossIds),
         updatedAt: new Date().toISOString(),
       };
 
