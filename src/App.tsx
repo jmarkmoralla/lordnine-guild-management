@@ -10,12 +10,13 @@ import ManageBossTimerPage from './components/ManageBossTimerPage'
 import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
 import RelicCalculatorPage from './components/RelicCalculatorPage'
 import LoginPage from './components/LoginPage'
+import ManageAdminsPage from './components/ManageAdminsPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
 import './App.css'
 
 function App() {
-  const { isAdmin, logout } = useFirebaseAuth()
+  const { isAdmin, role, canManageAdmins, user, logout } = useFirebaseAuth()
   const [activePage, setActivePage] = useState('dashboard')
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -58,6 +59,8 @@ function App() {
         return <RankingsPage />
       case 'manage-members':
         return <MembersManagePage userType={userType!} />
+      case 'manage-admins':
+        return <ManageAdminsPage canManageAdmins={canManageAdmins} currentUserUid={user?.uid ?? null} />
       case 'manage-boss-timer':
         return <ManageBossTimerPage userType={userType!} />
       case 'manage-boss-notifier':
@@ -80,6 +83,7 @@ function App() {
         activePage={activePage} 
         onNavigate={setActivePage}
         userType={userType}
+        userRole={role}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         onLogout={handleLogout}

@@ -10,21 +10,24 @@ import {
   Moon,
   Sun,
   User,
+  UserCog,
   Users,
 } from 'lucide-react';
 import '../styles/Sidebar.css';
+import type { AppRole } from '../types/admin';
 
 interface SidebarProps {
   activePage: string;
   onNavigate: (page: string) => void;
   userType: 'guest' | 'admin';
+  userRole: AppRole;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onLogout: () => void;
   onRequestSignIn?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
@@ -45,6 +48,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
       ? [{ id: 'manage-boss-notifier', label: 'Field Boss Notifier', icon: <Bell size={18} strokeWidth={1.75} /> }]
       : []),
   ];
+
+  const settingsMenuItems = userRole === 'super_admin'
+    ? [{ id: 'manage-admins', label: 'Manage Admins', icon: <UserCog size={18} strokeWidth={1.75} /> }]
+    : [];
 
   return (
     <aside className="sidebar">
@@ -106,6 +113,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
               ))}
             </>
           )}
+          {settingsMenuItems.length > 0 && (
+            <>
+              <li className="nav-section">Settings</li>
+              {settingsMenuItems.map((item) => (
+                <li key={item.id} className="nav-item">
+                  <button
+                    className={`nav-link ${activePage === item.id ? 'active' : ''}`}
+                    onClick={() => onNavigate(item.id)}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-label">{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </>
+          )}
         </ul>
       </nav>
 
@@ -113,9 +136,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, isD
         <div className="footer-controls">
           <div className="user-badge-small">
             <span className="user-icon" aria-hidden="true">
-              {userType === 'admin' ? <Crown size={14} strokeWidth={1.8} /> : <User size={14} strokeWidth={1.8} />}
+              {userRole === 'super_admin'
+                ? <Crown size={14} strokeWidth={1.8} />
+                : userType === 'admin'
+                  ? <Crown size={14} strokeWidth={1.8} />
+                  : <User size={14} strokeWidth={1.8} />}
             </span>
-            <span className="user-text">{userType === 'admin' ? 'Admin' : 'Guest'}</span>
+            <span className="user-text">
+              {userRole === 'super_admin' ? 'Super Admin' : userType === 'admin' ? 'Admin' : 'Guest'}
+            </span>
           </div>
           
           <button

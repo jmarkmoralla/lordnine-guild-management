@@ -7,6 +7,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
+import type { AppRole } from '../types/admin';
 
 const INSUFFICIENT_ROLE_CODE = 'auth/insufficient-role';
 const DISABLED_ADMIN_CODE = 'auth/disabled-admin';
@@ -16,6 +17,8 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
+  role: AppRole;
+  canManageAdmins: boolean;
 }
 
 interface AuthContextReturn extends AuthState {
@@ -29,6 +32,8 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     loading: true,
     error: null,
     isAdmin: false,
+    role: 'guest',
+    canManageAdmins: false,
   });
   // Listen to auth state changes
   useEffect(() => {
@@ -38,6 +43,8 @@ export const useFirebaseAuth = (): AuthContextReturn => {
       const adminAccess = user ? await getAdminAccess(user) : {
         isAdmin: false,
         isEnabled: false,
+        role: 'guest' as AppRole,
+        canManageAdmins: false,
       };
       if (!isMounted) return;
 
@@ -46,6 +53,8 @@ export const useFirebaseAuth = (): AuthContextReturn => {
         loading: false,
         error: null,
         isAdmin: adminAccess.isAdmin,
+        role: adminAccess.role,
+        canManageAdmins: adminAccess.canManageAdmins,
       });
     });
 
@@ -64,6 +73,8 @@ export const useFirebaseAuth = (): AuthContextReturn => {
       const adminAccess = currentUser ? await getAdminAccess(currentUser) : {
         isAdmin: false,
         isEnabled: false,
+        role: 'guest' as AppRole,
+        canManageAdmins: false,
       };
       if (!adminAccess.isAdmin) {
         await signOut(auth);
@@ -137,21 +148,41 @@ function normalizeAuthError(err: unknown): { code: string; message: string } {
   return { code: 'auth/unknown', message: String(err) };
 }
 
-async function getAdminAccess(user: User): Promise<{ isAdmin: boolean; isEnabled: boolean }> {
+async function getAdminAccess(user: User): Promise<{
+  isAdmin: boolean;
+  isEnabled: boolean;
+  role: AppRole;
+  canManageAdmins: boolean;
+}> {
   if (user.isAnonymous) {
-    return { isAdmin: false, isEnabled: false };
+    return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
   }
 
   try {
     const adminDocRef = doc(db, 'admins', user.uid);
     const adminDoc = await getDoc(adminDocRef);
     if (!adminDoc.exists()) {
-      return { isAdmin: false, isEnabled: false };
+      return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
     }
 
     const isEnabled = adminDoc.data()?.enabled === true;
-    return { isAdmin: isEnabled, isEnabled };
+    const role = isEnabled
+      ? normalizeAdminRole(adminDoc.data()?.role, true)
+      : normalizeAdminRole(adminDoc.data()?.role, false);
+
+    return {
+      isAdmin: isEnabled,
+      isEnabled,
+      role: isEnabled ? role : 'guest',
+      canManageAdmins: isEnabled && role === 'super_admin',
+    };
   } catch {
-    return { isAdmin: false, isEnabled: false };
+    return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
   }
+}
+
+function normalizeAdminRole(role: unknown, fallbackToSuperAdmin: boolean): Exclude<AppRole, 'guest'> {
+  if (role === 'super_admin') return 'super_admin';
+  if (role === 'admin') return 'admin';
+  return fallbackToSuperAdmin ? 'super_admin' : 'admin';
 }

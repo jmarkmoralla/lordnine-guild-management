@@ -5,18 +5,74 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdminUser() {
+    function adminDocument() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isEnabledAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
+        && adminDocument().data.enabled == true;
+    }
+
+    function isSuperAdmin() {
+      return isEnabledAdmin()
+        && (
+          !('role' in adminDocument().data)
+          || adminDocument().data.role == 'super_admin'
+        );
     }
 
     match /admins/{uid} {
-      allow read: if isAdminUser() && request.auth.uid == uid;
+      allow read: if isEnabledAdmin() && request.auth.uid == uid;
+    }
+
+    match /adminAuditLogs/{document} {
+      allow read: if isSuperAdmin();
+    }
+
+    match /guildMembers/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /guildActivities/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /guildInfo/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /bossInfo/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /guildAttendance/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /guildAttendanceSummary/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /bossNotifier/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /relicCalculator/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
     }
 
     match /{document=**} {
-      allow read, write: if isAdminUser() && !document.matches('admins/.*');
+      allow read, write: if false;
     }
   }
 }
