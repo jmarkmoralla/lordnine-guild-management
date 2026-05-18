@@ -976,6 +976,22 @@
   color: #ffffff;
 }
 
+.attendance-ocr-member-name-cell {
+  min-width: 210px;
+}
+
+.attendance-ocr-member-name-primary {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.attendance-ocr-member-name-secondary {
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
 .attendance-ocr-status-badge {
   display: inline-flex;
   align-items: center;

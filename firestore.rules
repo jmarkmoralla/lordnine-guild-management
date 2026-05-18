@@ -46,6 +46,11 @@ service cloud.firestore {
       allow write: if isEnabledAdmin();
     }
 
+    match /allianceInfo/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
     match /bossInfo/{docId} {
       allow read: if true;
       allow write: if isEnabledAdmin();
@@ -67,6 +72,11 @@ service cloud.firestore {
     }
 
     match /relicCalculator/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
+    match /marketplaceItems/{docId} {
       allow read: if true;
       allow write: if isEnabledAdmin();
     }

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Crown, Trophy, Users, Loader, Clock3 } from 'lucide-react';
 import '../styles/Dashboard.css';
+import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
-import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import type { BossInfo } from '../hooks/useFirestoreBossInfo';
 import { formatPhilippinesMonthDayTime12, getPhilippinesNowDate } from '../utils/philippinesTime';
@@ -247,7 +247,7 @@ const getBossDetailStatus = (boss: BossInfo) => {
 
 const DashboardPage: React.FC = () => {
   const { members } = useFirestoreMembers();
-  const { guildInfo, loading: guildLoading } = useFirestoreGuildInfo();
+  const { factionLeader, guildNames, loading: allianceLoading } = useFirestoreAllianceInfo();
   const { bosses, loading: bossLoading } = useFirestoreBossInfo();
   const [, setStatusTick] = useState(0);
   const [selectedBoss, setSelectedBoss] = useState<BossInfo | null>(null);
@@ -255,6 +255,7 @@ const DashboardPage: React.FC = () => {
   const [tooltipPlacement, setTooltipPlacement] = useState<'top' | 'bottom'>('bottom');
   
   const guildMaster = members.find((member) => member.memberType === 'guild master');
+  const displayFactionLeader = factionLeader || guildMaster?.name || 'None';
   const aliveBosses = bosses
     .filter((boss) => getDisplayBossStatus(boss) === 'alive')
     .slice()
@@ -333,8 +334,8 @@ const DashboardPage: React.FC = () => {
             <Users size={28} strokeWidth={1.75} />
           </div>
           <div className="stat-content">
-            <h3>Guild Members</h3>
-            <p className="stat-value">{members.length}/50</p>
+            <h3>Faction Members</h3>
+            <p className="stat-value">{members.length}</p>
           </div>
         </div>
 
@@ -343,14 +344,12 @@ const DashboardPage: React.FC = () => {
             <Trophy size={28} strokeWidth={1.75} />
           </div>
           <div className="stat-content">
-            <h3>Guild Level</h3>
+            <h3>Allied Guilds</h3>
             <p className="stat-value">
-              {guildLoading ? (
+              {allianceLoading ? (
                 <Loader size={20} className="spinner" />
-              ) : guildInfo?.guildLevel !== undefined ? (
-                guildInfo.guildLevel
               ) : (
-                'N/A'
+                guildNames.length
               )}
             </p>
           </div>
@@ -361,8 +360,8 @@ const DashboardPage: React.FC = () => {
             <Crown size={28} strokeWidth={1.75} />
           </div>
           <div className="stat-content">
-            <h3>Guild Master</h3>
-            <p className="stat-value">{guildMaster?.name || 'None'}</p>
+            <h3>Faction Leader</h3>
+            <p className="stat-value">{displayFactionLeader}</p>
           </div>
         </div>
       </div>

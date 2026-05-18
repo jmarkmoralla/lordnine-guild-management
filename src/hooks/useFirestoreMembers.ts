@@ -13,7 +13,7 @@ import {
 import { db } from '../config/firebase';
 import { DEFAULT_MEMBER_CLASS, isMemberClass, type MemberClass } from '../utils/memberClass';
 
-interface MemberRanking {
+export interface MemberRanking {
   id?: string;
   rank: number;
   name: string;
@@ -21,6 +21,7 @@ interface MemberRanking {
   playerClass: MemberClass;
   level: number;
   combatPower: number;
+  guildName: string;
   status: 'active' | 'inactive';
   memberType: 'guild master' | 'elite' | 'normal';
 }
@@ -70,6 +71,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
             playerClass: isMemberClass(rawData.playerClass) ? rawData.playerClass : DEFAULT_MEMBER_CLASS,
             level: Number(rawData.level || 1),
             combatPower: Number(rawData.combatPower || 0),
+            guildName: typeof rawData.guildName === 'string' ? rawData.guildName : '',
             status: rawData.status === 'inactive' ? 'inactive' : 'active',
             memberType:
               rawData.memberType === 'guild master'
@@ -117,6 +119,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
         playerClass: isMemberClass(member.playerClass) ? member.playerClass : DEFAULT_MEMBER_CLASS,
         level: member.level,
         combatPower: member.combatPower,
+        guildName: member.guildName ?? '',
         status: member.status,
         memberType: member.memberType,
       };

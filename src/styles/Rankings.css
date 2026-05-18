@@ -43,6 +43,18 @@
   justify-content: flex-end;
 }
 
+.rankings-filter-panel {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: -0.75rem 0 1.5rem;
+  flex-wrap: wrap;
+}
+
+.rankings-filter-panel .filter-select {
+  min-width: 180px;
+}
+
 .rankings-filters .filter-input {
   flex: 1;
   min-width: 200px;
@@ -173,6 +185,26 @@
   transform: scale(0.98) translateY(0);
 }
 
+.filter-toggle-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.filter-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.filter-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
 /* Rankings Table */
 .rankings-table-container {
   background: var(--bg-secondary);
@@ -291,6 +323,16 @@ th.col-level {
 }
 
 th.col-multiplier {
+  text-align: center;
+}
+
+.col-guild {
+  min-width: 110px;
+  text-align: center;
+}
+
+th.col-guild,
+td.col-guild {
   text-align: center;
 }
 
@@ -487,8 +529,14 @@ td.col-type {
     gap: 0.75rem;
   }
 
+  .rankings-filter-panel {
+    flex-direction: column;
+    margin-top: -0.4rem;
+  }
+
   .rankings-filters .filter-input,
   .rankings-filters .filter-select,
+  .rankings-filter-panel .filter-select,
   .refresh-btn-filter {
     width: 100%;
   }

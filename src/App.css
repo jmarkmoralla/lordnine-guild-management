@@ -5,6 +5,12 @@
   --bg-tertiary: #f8f9fa;
   --text-primary: #2c3e50;
   --text-secondary: #7f8c8d;
+  --item-grade-color-common: #000000;
+  --item-grade-color-green: #2ecc71;
+  --item-grade-color-blue: #3498db;
+  --item-grade-color-magenta: #b57be4;
+  --item-grade-color-orange: #f39c12;
+  --item-grade-color-red: #e74c3c;
   --border-color: #e0e0e0;
   --border-light: #ddd;
   --sidebar-bg: #2a2a2a;
@@ -20,6 +26,7 @@
   --bg-tertiary: #3a3a3a;
   --text-primary: #e0e0e0;
   --text-secondary: #a0a0a0;
+  --item-grade-color-common: #ffffff;
   --border-color: #444;
   --border-light: #555;
   --sidebar-bg: #242424;
