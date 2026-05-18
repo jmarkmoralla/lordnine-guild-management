@@ -8,6 +8,7 @@ import {
   LogIn,
   LogOut,
   Moon,
+  ShoppingBag,
   Sun,
   User,
   UserCog,
@@ -32,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
     { id: 'rankings', label: 'Members', icon: <Users size={18} strokeWidth={1.75} /> },
+    { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={18} strokeWidth={1.75} /> },
   ];
 
   const managementMenuItems = userType === 'admin'
@@ -39,6 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
         { id: 'manage-boss-timer', label: 'Manage Boss Timer', icon: <Clock size={18} strokeWidth={1.75} /> },
         { id: 'manage-attendance', label: 'Manage Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
         { id: 'manage-members', label: 'Manage Members', icon: <Users size={18} strokeWidth={1.75} /> },
+        { id: 'manage-marketplace', label: 'Manage Marketplace', icon: <ShoppingBag size={18} strokeWidth={1.75} /> },
       ]
     : [];
 

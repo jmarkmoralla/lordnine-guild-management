@@ -6,6 +6,8 @@ import AttendancePage from './components/AttendancePage'
 import ManageGuildAttendancePage from './components/ManageGuildAttendancePage'
 import RankingsPage from './components/RankingsPage'
 import MembersManagePage from './components/MembersManagePage'
+import MarketplacePage from './components/MarketplacePage'
+import ManageMarketplacePage from './components/ManageMarketplacePage'
 import ManageBossTimerPage from './components/ManageBossTimerPage'
 import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
 import RelicCalculatorPage from './components/RelicCalculatorPage'
@@ -57,8 +59,12 @@ function App() {
         return <ManageGuildAttendancePage userType={userType!} />
       case 'rankings':
         return <RankingsPage />
+      case 'marketplace':
+        return <MarketplacePage />
       case 'manage-members':
         return <MembersManagePage userType={userType!} />
+      case 'manage-marketplace':
+        return <ManageMarketplacePage userType={userType!} />
       case 'manage-admins':
         return <ManageAdminsPage canManageAdmins={canManageAdmins} currentUserUid={user?.uid ?? null} />
       case 'manage-boss-timer':

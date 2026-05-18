@@ -1,12 +1,13 @@
 /* Sidebar Styles */
 .sidebar {
   width: 280px;
+  height: 100vh;
   background: var(--sidebar-bg);
   color: white;
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 10px var(--shadow-light);
-  overflow-y: auto;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
@@ -15,6 +16,7 @@
 }
 
 .sidebar-header {
+  flex-shrink: 0;
   padding: 1.25rem 1.25rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: var(--sidebar-bg);
@@ -89,7 +91,9 @@
 
 .sidebar-nav {
   flex: 1;
-  padding: 2rem 0;
+  min-height: 0;
+  padding: 0.5rem 0;
+  overflow-y: auto;
 }
 
 .nav-menu {
@@ -170,6 +174,7 @@
 }
 
 .sidebar-footer {
+  flex-shrink: 0;
   padding: 1.25rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.15);

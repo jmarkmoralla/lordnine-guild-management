@@ -1,23 +1,11 @@
-import { useState } from 'react';
-import { Award, Crown, Loader, Pencil, Plus, Search, Trophy, Trash2, Users, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Award, Crown, Loader, Pencil, Plus, Search, SlidersHorizontal, Trophy, Trash2, Users, X } from 'lucide-react';
 import '../styles/Attendance.css';
 import '../styles/Rankings.css';
-import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
-import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
+import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
+import { useFirestoreMembers, type MemberRanking } from '../hooks/useFirestoreMembers';
 import { getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
 import { DEFAULT_MEMBER_CLASS, MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
-
-interface MemberRanking {
-  id?: string;
-  rank: number;
-  name: string;
-  walletAddress: string;
-  playerClass: MemberClass;
-  level: number;
-  combatPower: number;
-  status: 'active' | 'inactive';
-  memberType: 'guild master' | 'elite' | 'normal';
-}
 
 interface MembersManagePageProps {
   userType: 'guest' | 'admin';
@@ -25,7 +13,7 @@ interface MembersManagePageProps {
 
 const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const { members, loading, error, addMember, updateMember, deleteMember } = useFirestoreMembers();
-  const { guildInfo, loading: guildLoading } = useFirestoreGuildInfo();
+  const { guildNames, factionLeader, loading: allianceLoading, error: allianceError } = useFirestoreAllianceInfo();
   const [editingMember, setEditingMember] = useState<MemberRanking | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -33,16 +21,40 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [copiedWalletMemberId, setCopiedWalletMemberId] = useState<string | null>(null);
   const [sortBy] = useState<'combatPower'>('combatPower');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGuildFilter, setSelectedGuildFilter] = useState('all');
+  const [selectedClassFilter, setSelectedClassFilter] = useState<'all' | MemberClass>('all');
+  const [showFilters, setShowFilters] = useState(false);
   const guildMaster = members.find((member) => member.memberType === 'guild master');
+  const displayFactionLeader = factionLeader || guildMaster?.name || 'None';
 
   const sortedMembers = [...members].sort((a, b) => {
     if (sortBy === 'combatPower') return b.combatPower - a.combatPower;
     return 0;
   });
 
-  const filteredMembers = sortedMembers.filter((member) =>
-    member.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const guildFilterOptions = useMemo(() => {
+    const nextGuildNames = new Set<string>();
+
+    guildNames.forEach((guildName) => {
+      if (guildName.trim()) nextGuildNames.add(guildName);
+    });
+
+    members.forEach((member) => {
+      if (member.guildName.trim()) nextGuildNames.add(member.guildName.trim());
+    });
+
+    return [...nextGuildNames].sort((first, second) => first.localeCompare(second));
+  }, [guildNames, members]);
+
+  const hasActiveFilters = selectedGuildFilter !== 'all' || selectedClassFilter !== 'all';
+
+  const filteredMembers = sortedMembers.filter((member) => {
+    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesGuild = selectedGuildFilter === 'all' || member.guildName === selectedGuildFilter;
+    const matchesClass = selectedClassFilter === 'all' || member.playerClass === selectedClassFilter;
+
+    return matchesSearch && matchesGuild && matchesClass;
+  });
 
   const getMedalIcon = (index: number) => {
     switch (index) {
@@ -64,6 +76,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
     playerClass: DEFAULT_MEMBER_CLASS,
     level: 1,
     combatPower: 0,
+    guildName: '',
     status: 'active',
     memberType: 'normal',
   });
@@ -76,6 +89,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       playerClass: DEFAULT_MEMBER_CLASS,
       level: 1,
       combatPower: 0,
+      guildName: '',
       status: 'active',
       memberType: 'normal',
     });
@@ -105,6 +119,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
         playerClass: newMember.playerClass,
         level: newMember.level,
         combatPower: newMember.combatPower,
+        guildName: newMember.guildName,
         status: newMember.status,
         memberType: newMember.memberType,
       });
@@ -170,7 +185,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             <Users size={24} strokeWidth={1.75} />
           </div>
           <div className="members-stat-content">
-            <h3>Guild Members</h3>
+            <h3>Faction Members</h3>
             <p className="members-stat-value">{members.length}</p>
           </div>
         </div>
@@ -180,14 +195,12 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             <Trophy size={24} strokeWidth={1.75} />
           </div>
           <div className="members-stat-content">
-            <h3>Guild Level</h3>
+            <h3>Allied Guilds</h3>
             <p className="members-stat-value">
-              {guildLoading ? (
+              {allianceLoading ? (
                 <Loader size={18} strokeWidth={2} />
-              ) : guildInfo?.guildLevel !== undefined ? (
-                guildInfo.guildLevel
               ) : (
-                'N/A'
+                guildNames.length
               )}
             </p>
           </div>
@@ -198,8 +211,8 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             <Crown size={24} strokeWidth={1.75} />
           </div>
           <div className="members-stat-content">
-            <h3>Guild Master</h3>
-            <p className="members-stat-value">{guildMaster?.name || 'None'}</p>
+            <h3>Faction Leader</h3>
+            <p className="members-stat-value">{displayFactionLeader}</p>
           </div>
         </div>
       </div>
@@ -230,6 +243,16 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
         </div>
         <button
           type="button"
+          className={`refresh-btn-filter icon-only filter-toggle-btn${hasActiveFilters ? ' active' : ''}`}
+          onClick={() => setShowFilters((current) => !current)}
+          title="Filter members"
+          aria-label="Filter members"
+          aria-expanded={showFilters}
+        >
+          <SlidersHorizontal size={16} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
           className="refresh-btn-filter icon-only"
           onClick={openAddModal}
           title="Add Member"
@@ -238,6 +261,33 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
           <Plus size={16} strokeWidth={1.8} />
         </button>
       </div>
+
+      {showFilters && (
+        <div className="rankings-filter-panel" aria-label="Member filters">
+          <select
+            className="filter-select"
+            value={selectedGuildFilter}
+            onChange={(event) => setSelectedGuildFilter(event.target.value)}
+            aria-label="Filter members by guild"
+          >
+            <option value="all">All Guilds</option>
+            {guildFilterOptions.map((guildName) => (
+              <option key={guildName} value={guildName}>{guildName}</option>
+            ))}
+          </select>
+          <select
+            className="filter-select"
+            value={selectedClassFilter}
+            onChange={(event) => setSelectedClassFilter(event.target.value as 'all' | MemberClass)}
+            aria-label="Filter members by class"
+          >
+            <option value="all">All Classes</option>
+            {MEMBER_CLASSES.map((memberClass) => (
+              <option key={memberClass} value={memberClass}>{memberClass}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {loading && (
         <div className="loading-state">
@@ -262,6 +312,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
               <th className="col-level">Level</th>
               <th className="col-combat">Combat Power</th>
               <th className="col-multiplier">Multiplier</th>
+              <th className="col-guild">Guild</th>
               <th className="col-status">Status</th>
               <th className="col-type">Type</th>
               <th className="col-actions">Actions</th>
@@ -307,6 +358,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   <span className="combat-power">{member.combatPower.toLocaleString()}</span>
                 </td>
                 <td className="col-multiplier">{getCombatPowerMultiplier(member.combatPower).toFixed(1)}</td>
+                <td className="col-guild">{member.guildName || '—'}</td>
                 <td className="col-status">
                   <span className={`status-badge status-${member.status}`}>
                     {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
@@ -337,7 +389,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             ))}
             {filteredMembers.length === 0 && (
               <tr>
-                <td colSpan={10} className="attendance-empty-row">
+                <td colSpan={11} className="attendance-empty-row">
                   No members found.
                 </td>
               </tr>
@@ -418,6 +470,27 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   <option value="normal">Normal</option>
                   <option value="elite">Elite</option>
                   <option value="guild master">Guild Master</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Guild</label>
+                <select
+                  value={newMember.guildName}
+                  onChange={(e) => setNewMember({ ...newMember, guildName: e.target.value })}
+                  disabled={allianceLoading}
+                >
+                  <option value="">
+                    {allianceLoading
+                      ? 'Loading guilds...'
+                      : allianceError
+                        ? 'Unable to load guilds'
+                        : guildNames.length === 0
+                          ? 'No guilds found'
+                          : 'Select guild'}
+                  </option>
+                  {guildNames.map((guildName) => (
+                    <option key={guildName} value={guildName}>{guildName}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -503,6 +576,27 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                   <option value="normal">Normal</option>
                   <option value="elite">Elite</option>
                   <option value="guild master">Guild Master</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Guild</label>
+                <select
+                  value={editingMember.guildName}
+                  onChange={(e) => setEditingMember({ ...editingMember, guildName: e.target.value })}
+                  disabled={allianceLoading}
+                >
+                  <option value="">
+                    {allianceLoading
+                      ? 'Loading guilds...'
+                      : allianceError
+                        ? 'Unable to load guilds'
+                        : guildNames.length === 0
+                          ? 'No guilds found'
+                          : 'Select guild'}
+                  </option>
+                  {guildNames.map((guildName) => (
+                    <option key={guildName} value={guildName}>{guildName}</option>
+                  ))}
                 </select>
               </div>
             </div>

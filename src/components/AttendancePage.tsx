@@ -11,7 +11,7 @@ import { useFirestoreAttendanceSummary } from '../hooks/useFirestoreAttendanceSu
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { getAttendancePoints, getAttendancePointsForBossSelection } from '../utils/attendancePoints.ts';
-import { getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
+import { getCombatPowerMultiplier, MINIMUM_ATTENDANCE_COMBAT_POWER } from '../utils/combatPowerMultiplier.ts';
 import { getPhilippinesNowParts } from '../utils/philippinesTime';
 
 interface AttendancePageProps {
@@ -26,15 +26,28 @@ interface OcrAttendanceRow {
   detectedName: string;
   matchedMemberId: string | null;
   matchedMemberName: string | null;
+  suggestedMemberNames: string[];
   combatPower: number | null;
   multiplier: number | null;
   status: 'matched' | 'unmatched';
 }
 
-const OCR_ENGLISH_ONLY_SANITIZER = /[^A-Za-z\s]/g;
+const OCR_ENGLISH_ONLY_SANITIZER = /[^A-Za-z0-9\s]/g;
 const DEFAULT_OCR_PROXY_PATH = '/api/ocr-space';
 const OCR_SPACE_ENDPOINT = import.meta.env.VITE_OCR_SPACE_ENDPOINT?.trim() || 'https://api.ocr.space/parse/image';
 const OCR_SPACE_API_KEY = import.meta.env.VITE_OCR_SPACE_API_KEY?.trim() || '';
+const SHORT_OCR_NAME_MAX_LENGTH = 4;
+const SHORT_OCR_FUSE_THRESHOLD = 0.18;
+const OCR_CHAR_VARIANTS: Record<string, string[]> = {
+  '0': ['o'],
+  '1': ['i', 'l'],
+  '2': ['z'],
+  '5': ['s'],
+  '6': ['g'],
+  '8': ['b'],
+  i: ['i', 'l'],
+  l: ['l', 'i'],
+};
 
 const getDefaultOcrProxyEndpoint = () => {
   const configuredEndpoint = import.meta.env.VITE_OCR_PROXY_ENDPOINT?.trim();
@@ -55,6 +68,7 @@ const getDefaultOcrProxyEndpoint = () => {
 };
 
 const OCR_PROXY_ENDPOINT = getDefaultOcrProxyEndpoint();
+const isAttendanceEligibleByCombatPower = (combatPower: number) => Number(combatPower || 0) >= MINIMUM_ATTENDANCE_COMBAT_POWER;
 
 interface OcrSpaceParsedResult {
   ParsedText?: string;
@@ -111,21 +125,62 @@ const parseOcrResponse = async (response: Response) => {
   }
 };
 
-const normalizeOcrName = (value: string) => value.toLowerCase().replace(/[^a-z]/g, '');
+const normalizeOcrName = (value: string) => value
+  .toLowerCase()
+  .replace(/[0]/g, 'o')
+  .replace(/[2]/g, 'z')
+  .replace(/[5]/g, 's')
+  .replace(/[6]/g, 'g')
+  .replace(/[8]/g, 'b')
+  .replace(/[1]/g, 'i')
+  .replace(/[^a-z]/g, '');
+
+const normalizeOcrAlphaNumericName = (value: string) => value
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, '');
+
+const getNormalizedOcrVariants = (value: string) => {
+  const sanitized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalized = normalizeOcrName(sanitized);
+
+  if (!normalized) return [] as string[];
+  if (normalized.length > SHORT_OCR_NAME_MAX_LENGTH) return [normalized];
+
+  let variants = [''];
+
+  for (const character of sanitized) {
+    const options = OCR_CHAR_VARIANTS[character] ?? [character];
+    const nextVariants = [] as string[];
+
+    variants.forEach((prefix) => {
+      options.forEach((option) => {
+        nextVariants.push(prefix + option);
+      });
+    });
+
+    variants = nextVariants.slice(0, 32);
+  }
+
+  return Array.from(new Set(variants.map((variant) => normalizeOcrName(variant)).filter(Boolean)));
+};
 
 const getOcrRowKey = (row: Pick<OcrAttendanceRow, 'matchedMemberId' | 'detectedName'>) => {
   if (row.matchedMemberId) {
     return `member:${row.matchedMemberId}`;
   }
 
-  const normalizedDetectedName = normalizeOcrName(row.detectedName);
-  return normalizedDetectedName ? `detected:${normalizedDetectedName}` : '';
+  const detectedNameKey = getOcrDetectedNameKey(row.detectedName);
+  return detectedNameKey ? `detected:${detectedNameKey}` : '';
 };
+
+const getOcrDetectedNameKey = (detectedName: string) =>
+  normalizeOcrAlphaNumericName(detectedName) || normalizeOcrName(detectedName);
 
 const tokenizeOcrName = (value: string) =>
   value
     .toLowerCase()
-    .split(/[^a-z]+/)
+    .split(/[^a-z0-9]+/)
+    .map((token) => normalizeOcrName(token))
     .filter((token) => token.length >= 2);
 
 const extractOcrNameCandidates = (rawText: string) => {
@@ -133,7 +188,11 @@ const extractOcrNameCandidates = (rawText: string) => {
     .split(/\r?\n/)
     .map((line) => line.replace(OCR_ENGLISH_ONLY_SANITIZER, ' ').replace(/\s+/g, ' ').trim())
     .filter((line) => /[a-z]/i.test(line))
-    .filter((line) => normalizeOcrName(line).length >= 3);
+    .filter((line) => {
+      const normalizedLine = normalizeOcrName(line);
+      const normalizedAlphaNumericLine = normalizeOcrAlphaNumericName(line);
+      return normalizedLine.length >= 3 || normalizedAlphaNumericLine.length >= 3;
+    });
 };
 
 const readBlobAsDataUrl = (imageSource: Blob | File) => new Promise<string>((resolve, reject) => {
@@ -395,13 +454,30 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const comparableMembers = useMemo(
     () => members
       .filter((member): member is typeof member & { id: string } => Boolean(member.id))
+      .filter((member) => isAttendanceEligibleByCombatPower(member.combatPower))
       .map((member) => ({
       ...member,
       normalizedName: normalizeOcrName(member.name),
+      normalizedAlphaNumericName: normalizeOcrAlphaNumericName(member.name),
       nameTokens: tokenizeOcrName(member.name),
     })),
     [members]
   );
+
+  const comparableMembersByAlphaNumericName = useMemo(() => {
+    const nextMap = new Map<string, typeof comparableMembers>();
+
+    comparableMembers.forEach((member) => {
+      if (!member.normalizedAlphaNumericName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedAlphaNumericName) ?? [];
+      nextMap.set(member.normalizedAlphaNumericName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [comparableMembers]);
 
   const comparableMembersByNormalizedName = useMemo(() => {
     const nextMap = new Map<string, typeof comparableMembers>();
@@ -448,18 +524,17 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
   const filteredOcrRows = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
-    const matchedRows = ocrRows.filter(
-      (row) => row.status === 'matched'
-        && Boolean(row.matchedMemberId)
-        && draftAttendanceByMemberId[row.matchedMemberId as string] === 'present'
-    );
-    if (!normalizedSearch) return matchedRows;
+    if (!normalizedSearch) return ocrRows;
 
-    return matchedRows.filter((row) => {
-      const matchedName = row.matchedMemberName?.toLowerCase() ?? '';
-      return matchedName.includes(normalizedSearch);
+    return ocrRows.filter((row) => {
+      const searchableText = [
+        row.detectedName,
+        row.matchedMemberName ?? '',
+        row.suggestedMemberNames.join(' '),
+      ].join(' ').toLowerCase();
+      return searchableText.includes(normalizedSearch);
     });
-  }, [ocrRows, searchQuery, draftAttendanceByMemberId]);
+  }, [ocrRows, searchQuery]);
 
   const matchedOcrMemberIds = useMemo(
     () => Array.from(new Set(ocrRows.map((row) => row.matchedMemberId).filter((memberId): memberId is string => Boolean(memberId)))),
@@ -487,8 +562,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }));
   };
 
-  const handleRemoveOcrAttendanceRow = (memberId: string, memberName: string) => {
-    const shouldRemove = window.confirm(`Remove ${memberName} from OCR attendance?`);
+  const handleRemoveOcrAttendanceRow = (row: OcrAttendanceRow) => {
+    const label = row.matchedMemberName ?? row.detectedName ?? 'this OCR row';
+    const shouldRemove = window.confirm(`Remove ${label} from OCR attendance?`);
     if (!shouldRemove) {
       return;
     }
@@ -497,11 +573,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       setCreateAttendanceError(null);
     }
 
-    setDraftAttendanceByMemberId((current) => ({
-      ...current,
-      [memberId]: 'unmarked',
-    }));
-    setOcrRows((current) => current.filter((row) => row.matchedMemberId !== memberId));
+    if (row.matchedMemberId) {
+      setDraftAttendanceByMemberId((current) => ({
+        ...current,
+        [row.matchedMemberId as string]: 'unmarked',
+      }));
+    }
+
+    setOcrRows((current) => current.filter((currentRow) => currentRow.id !== row.id));
   };
 
   const closeCreateAttendanceModal = () => {
@@ -520,27 +599,57 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
   const findBestOcrMemberMatch = (candidateName: string, reservedMemberIds: Set<string>) => {
     const normalizedCandidate = normalizeOcrName(candidateName);
-    if (!normalizedCandidate) return null;
+    const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
+    if (!normalizedCandidate && !normalizedCandidateAlphaNumeric) return null;
 
     const candidateTokens = tokenizeOcrName(candidateName);
-    const exactNormalizedMatches = (comparableMembersByNormalizedName.get(normalizedCandidate) ?? [])
-      .filter((member) => !reservedMemberIds.has(member.id));
+    const candidateVariants = getNormalizedOcrVariants(candidateName);
+    const isShortCandidate = Math.max(normalizedCandidate.length, normalizedCandidateAlphaNumeric.length) <= SHORT_OCR_NAME_MAX_LENGTH;
 
-    if (exactNormalizedMatches.length === 1) {
-      return exactNormalizedMatches[0];
+    const exactAlphaNumericMatches = Array.from(new Map(
+      (comparableMembersByAlphaNumericName.get(normalizedCandidateAlphaNumeric) ?? [])
+        .filter((member) => !reservedMemberIds.has(member.id))
+        .map((member) => [member.id, member] as const)
+    ).values());
+
+    if (exactAlphaNumericMatches.length === 1) {
+      return exactAlphaNumericMatches[0];
     }
 
-    const exactTokenMatches = (comparableMembersByToken.get(normalizedCandidate) ?? [])
-      .filter((member) => !reservedMemberIds.has(member.id));
+    const exactVariantMatches = Array.from(new Map(
+      candidateVariants.flatMap((variant) => (
+        (comparableMembersByNormalizedName.get(variant) ?? [])
+          .filter((member) => !reservedMemberIds.has(member.id))
+          .map((member) => [member.id, member] as const)
+      ))
+    ).values());
+
+    if (exactVariantMatches.length === 1) {
+      return exactVariantMatches[0];
+    }
+
+    const exactTokenMatches = Array.from(new Map(
+      candidateVariants.flatMap((variant) => (
+        (comparableMembersByToken.get(variant) ?? [])
+          .filter((member) => !reservedMemberIds.has(member.id))
+          .map((member) => [member.id, member] as const)
+      ))
+    ).values());
 
     if (exactTokenMatches.length === 1) {
       return exactTokenMatches[0];
     }
 
-    const fuseResults = ocrMemberFuse.search(candidateName, { limit: 1 });
+    const fuseThreshold = isShortCandidate ? SHORT_OCR_FUSE_THRESHOLD : 0.34;
+    const fuseResults = ocrMemberFuse.search(candidateName, { limit: isShortCandidate ? 3 : 1 });
     const bestFuseResult = fuseResults[0];
+    const secondFuseResult = fuseResults[1];
 
-    if (bestFuseResult && (bestFuseResult.score ?? 1) <= 0.34) {
+    if (
+      bestFuseResult
+      && (bestFuseResult.score ?? 1) <= fuseThreshold
+      && (!isShortCandidate || !secondFuseResult || (secondFuseResult.score ?? 1) - (bestFuseResult.score ?? 1) >= 0.04)
+    ) {
       if (reservedMemberIds.has(bestFuseResult.item.id)) {
         return null;
       }
@@ -575,7 +684,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       }
     });
 
-    if (bestTokenScore < 0.65 || !bestTokenMatch) {
+    if (bestTokenScore < (isShortCandidate ? 0.9 : 0.65) || !bestTokenMatch) {
       return null;
     }
 
@@ -586,17 +695,64 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return bestTokenMatch;
   };
 
+  const getSuggestedOcrMemberNames = (candidateName: string, reservedMemberIds: Set<string>) => {
+    const normalizedCandidate = normalizeOcrName(candidateName);
+    const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
+    if (!normalizedCandidate && !normalizedCandidateAlphaNumeric) return [] as string[];
+
+    const candidateVariants = getNormalizedOcrVariants(candidateName);
+    const suggestions = new Map<string, string>();
+
+    (comparableMembersByAlphaNumericName.get(normalizedCandidateAlphaNumeric) ?? []).forEach((member) => {
+      if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
+      suggestions.set(member.id, member.name);
+    });
+
+    candidateVariants.forEach((variant) => {
+      (comparableMembersByNormalizedName.get(variant) ?? []).forEach((member) => {
+        if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
+        suggestions.set(member.id, member.name);
+      });
+
+      (comparableMembersByToken.get(variant) ?? []).forEach((member) => {
+        if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
+        suggestions.set(member.id, member.name);
+      });
+    });
+
+    if (suggestions.size < 3) {
+      ocrMemberFuse.search(candidateName, { limit: 5 }).forEach((result) => {
+        if ((result.score ?? 1) > 0.25) return;
+        if (reservedMemberIds.has(result.item.id) || suggestions.has(result.item.id)) return;
+        suggestions.set(result.item.id, result.item.name);
+      });
+    }
+
+    return [...suggestions.values()].slice(0, 3);
+  };
+
   const applyOcrTextToAttendance = (rawText: string, sourceLabel: string) => {
     const candidates = extractOcrNameCandidates(rawText);
     const seenRowKeys = new Set<string>();
+    const seenDetectedNameKeys = new Set<string>();
     const reservedMemberIds = new Set(
       ocrRows
         .map((row) => row.matchedMemberId)
         .filter((memberId): memberId is string => Boolean(memberId))
     );
+    const existingDetectedNameKeys = new Set(
+      ocrRows
+        .map((row) => getOcrDetectedNameKey(row.detectedName))
+        .filter(Boolean)
+    );
     const nextRows: OcrAttendanceRow[] = [];
 
     candidates.forEach((candidateName, index) => {
+      const detectedNameKey = getOcrDetectedNameKey(candidateName);
+      if (!detectedNameKey || seenDetectedNameKeys.has(detectedNameKey) || existingDetectedNameKeys.has(detectedNameKey)) {
+        return;
+      }
+
       const matchedMember = findBestOcrMemberMatch(candidateName, reservedMemberIds);
       const rowKey = getOcrRowKey({
         matchedMemberId: matchedMember?.id ?? null,
@@ -608,6 +764,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       }
 
       seenRowKeys.add(rowKey);
+      seenDetectedNameKeys.add(detectedNameKey);
       if (matchedMember?.id) {
         reservedMemberIds.add(matchedMember.id);
       }
@@ -617,6 +774,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         detectedName: candidateName,
         matchedMemberId: matchedMember?.id ?? null,
         matchedMemberName: matchedMember?.name ?? null,
+        suggestedMemberNames: matchedMember ? [] : getSuggestedOcrMemberNames(candidateName, reservedMemberIds),
         combatPower: matchedMember ? Number(matchedMember.combatPower || 0) : null,
         multiplier: matchedMember ? getCombatPowerMultiplier(Number(matchedMember.combatPower || 0)) : null,
         status: matchedMember ? 'matched' : 'unmatched',
@@ -939,7 +1097,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       ? ['-']
       : selectedBossNames.filter((selectedBossName) => bossNameOptions.includes(selectedBossName));
 
-    const membersToPersist = members.filter((member): member is typeof member & { id: string } => Boolean(member.id));
+    const membersToPersist = members
+      .filter((member): member is typeof member & { id: string } => Boolean(member.id))
+      .filter((member) => isAttendanceEligibleByCombatPower(member.combatPower));
 
     const presentMembersForSummary = membersToPersist
       .filter((member) => draftAttendanceByMemberId[member.id] === 'present')
@@ -1279,7 +1439,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                           event.target.checked
                         )
                       }
-                      disabled={!member.id}
+                      disabled={
+                        !member.id
+                        || (isCreateAttendanceOpen && !isAttendanceEligibleByCombatPower(member.combatPower))
+                      }
                     />
                   </label>
                 </td>
@@ -1874,7 +2037,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                     )}
                     {!isProcessingOcr && ocrRows.length > 0 && (
                       <p className="attendance-ocr-counter">
-                        Showing {filteredOcrRows.length} matched names from {ocrMatchSummary.detectedRows} detected names against {ocrMatchSummary.manualRows} members.
+                        Showing {filteredOcrRows.length} OCR rows from {ocrMatchSummary.detectedRows} detected names against {ocrMatchSummary.manualRows} eligible members.
                       </p>
                     )}
                   </div>
@@ -1897,7 +2060,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                       {filteredOcrRows.map((row, index) => (
                         <tr key={row.id}>
                           <td className="member-rank">{index + 1}</td>
-                          <td className="member-name">{row.matchedMemberName ?? 'No match'}</td>
+                          <td className="member-name attendance-ocr-member-name-cell">
+                            <div className="attendance-ocr-member-name-primary">
+                              {row.matchedMemberName ?? row.detectedName}
+                            </div>
+                            {row.matchedMemberName && row.detectedName !== row.matchedMemberName && (
+                              <div className="attendance-ocr-member-name-secondary">Detected: {row.detectedName}</div>
+                            )}
+                            {!row.matchedMemberName && row.suggestedMemberNames.length > 0 && (
+                              <div className="attendance-ocr-member-name-secondary">
+                                Suggestions: {row.suggestedMemberNames.join(', ')}
+                              </div>
+                            )}
+                          </td>
                           <td className="member-date member-combat-power">
                             {row.combatPower !== null ? row.combatPower.toLocaleString() : '—'}
                           </td>
@@ -1911,17 +2086,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                             </span>
                           </td>
                           <td className="member-action">
-                            {row.matchedMemberId && (
-                              <button
-                                type="button"
-                                className="details-delete-btn attendance-ocr-remove-btn"
-                                onClick={() => handleRemoveOcrAttendanceRow(row.matchedMemberId as string, row.matchedMemberName ?? 'this member')}
-                                aria-label={`Remove ${row.matchedMemberName ?? 'member'} from OCR attendance`}
-                                title="Remove from OCR attendance"
-                              >
-                                <X className="details-delete-icon" size={16} strokeWidth={2.2} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="details-delete-btn attendance-ocr-remove-btn"
+                              onClick={() => handleRemoveOcrAttendanceRow(row)}
+                              aria-label={`Remove ${row.matchedMemberName ?? row.detectedName} from OCR attendance`}
+                              title="Remove from OCR attendance"
+                            >
+                              <X className="details-delete-icon" size={16} strokeWidth={2.2} />
+                            </button>
                           </td>
                         </tr>
                       ))}
