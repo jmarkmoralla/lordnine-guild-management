@@ -3,9 +3,9 @@ import { Eye, EyeOff, Loader, Package2, Pencil, Plus, Search, ShoppingBag, Trash
 import { useFirestoreMarketplaceItems } from '../hooks/useFirestoreMarketplaceItems';
 import { useFirestoreMarketplacePricing } from '../hooks/useFirestoreMarketplacePricing';
 import {
-  formatMarketplaceCategory,
   getDiscountedMarketplacePriceDisplay,
   getDefaultMarketplacePart,
+  formatMarketplaceCategory,
   getMarketplaceImageUrl,
   getMarketplacePartOptions,
   formatMarketplacePart,
@@ -622,28 +622,36 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
 
                 <div className="form-group">
                   <label className="marketplace-editor-label" htmlFor="marketplace-item-usd">NEXT Market Price (USD)</label>
-                  <input
-                    id="marketplace-item-usd"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={formState.priceUsd}
-                    onChange={(event) => setFormState((current) => ({ ...current, priceUsd: Number(event.target.value) }))}
-                    required
-                  />
+                  <div className="attendance-guest-search-box marketplace-price-input-shell" role="group" aria-label="NEXT Market Price in USD">
+                    <span className="attendance-guest-search-icon marketplace-price-input-symbol" aria-hidden="true">$</span>
+                    <input
+                      id="marketplace-item-usd"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="attendance-guest-search-input marketplace-price-input"
+                      value={formState.priceUsd}
+                      onChange={(event) => setFormState((current) => ({ ...current, priceUsd: Number(event.target.value) }))}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
                   <label className="marketplace-editor-label" htmlFor="marketplace-item-php">NEXT Market Price (PHP)</label>
-                  <input
-                    id="marketplace-item-php"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={formState.pricePhp}
-                    onChange={(event) => setFormState((current) => ({ ...current, pricePhp: Number(event.target.value) }))}
-                    required
-                  />
+                  <div className="attendance-guest-search-box marketplace-price-input-shell" role="group" aria-label="NEXT Market Price in PHP">
+                    <span className="attendance-guest-search-icon marketplace-price-input-symbol" aria-hidden="true">₱</span>
+                    <input
+                      id="marketplace-item-php"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="attendance-guest-search-input marketplace-price-input"
+                      value={formState.pricePhp}
+                      onChange={(event) => setFormState((current) => ({ ...current, pricePhp: Number(event.target.value) }))}
+                      required
+                    />
+                  </div>
                 </div>
 
               </div>
