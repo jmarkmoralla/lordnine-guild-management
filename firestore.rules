@@ -81,6 +81,11 @@ service cloud.firestore {
       allow write: if isEnabledAdmin();
     }
 
+    match /appSettings/marketplacePricing {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

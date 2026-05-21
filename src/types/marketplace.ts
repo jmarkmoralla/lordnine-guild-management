@@ -64,6 +64,14 @@ export interface MarketplaceItem {
   updatedAt: string;
 }
 
+export interface MarketplacePricingSettings {
+  phpPerUsd: number | null;
+  source: string;
+  sourceDate: string;
+  fetchedAt: string;
+  updatedAt: string;
+}
+
 const marketplaceUsdFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -320,23 +328,74 @@ export const formatMarketplacePart = (part: MarketplacePart) => ({
   boots: 'Boots',
 }[part]);
 
-export const getDiscountedMarketplacePriceDisplay = (item: MarketplaceItem) => {
-  if (item.category === 'weapon' && item.rarity === 'mythic' && item.pricePhp > 50000) {
+const getItemPhpCap = (item: MarketplaceItem) => {
+  if (item.category === 'weapon') {
+    if (item.rarity === 'mythic') return 50000;
+    if (item.rarity === 'legendary') return 20000;
+  }
+
+  if (item.category === 'accessories' && item.subcategory === 'necklace' && item.rarity === 'legendary') {
+    return 10000;
+  }
+
+  if (item.category === 'armor' && item.rarity === 'mythic') {
+    return 10000;
+  }
+
+  return null;
+};
+
+const getUsdFromPhpAmount = (
+  phpAmount: number,
+  pricingSettings?: MarketplacePricingSettings,
+) => {
+  const phpPerUsd = pricingSettings?.phpPerUsd;
+
+  if (typeof phpPerUsd !== 'number' || !Number.isFinite(phpPerUsd) || phpPerUsd <= 0) {
+    return null;
+  }
+
+  return phpAmount / phpPerUsd;
+};
+
+export const getDiscountedMarketplacePriceValues = (
+  item: MarketplaceItem,
+  pricingSettings?: MarketplacePricingSettings,
+) => {
+  const discountedPhp = item.pricePhp * 0.5;
+  const discountedUsd = item.priceUsd * 0.5;
+  const phpCap = getItemPhpCap(item);
+
+  if (phpCap === null) {
     return {
-      usdDisplay: '-',
-      phpDisplay: marketplacePhpFormatter.format(50000),
+      php: discountedPhp,
+      usd: discountedUsd,
     };
   }
 
-  if (item.category === 'weapon' && item.rarity === 'legendary' && item.pricePhp > 20000) {
+  const cappedPhp = Math.min(discountedPhp, phpCap);
+
+  if (cappedPhp < phpCap) {
     return {
-      usdDisplay: '-',
-      phpDisplay: marketplacePhpFormatter.format(20000),
+      php: cappedPhp,
+      usd: getUsdFromPhpAmount(cappedPhp, pricingSettings),
     };
   }
 
   return {
-    usdDisplay: marketplaceUsdFormatter.format(item.priceUsd * 0.5),
-    phpDisplay: marketplacePhpFormatter.format(item.pricePhp * 0.5),
+    php: cappedPhp,
+    usd: discountedUsd,
+  };
+};
+
+export const getDiscountedMarketplacePriceDisplay = (
+  item: MarketplaceItem,
+  pricingSettings?: MarketplacePricingSettings,
+) => {
+  const discountedPrice = getDiscountedMarketplacePriceValues(item, pricingSettings);
+
+  return {
+    usdDisplay: discountedPrice.usd === null ? '-' : marketplaceUsdFormatter.format(discountedPrice.usd),
+    phpDisplay: marketplacePhpFormatter.format(discountedPrice.php),
   };
 };

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { BadgePercent, Gem, Loader, Search, ShoppingBag, X } from 'lucide-react';
 import { useFirestoreMarketplaceItems } from '../hooks/useFirestoreMarketplaceItems';
+import { useFirestoreMarketplacePricing } from '../hooks/useFirestoreMarketplacePricing';
 import {
   formatMarketplaceRarity,
   getDiscountedMarketplacePriceDisplay,
+  getDiscountedMarketplacePriceValues,
   MARKETPLACE_RARITY_OPTIONS,
   type MarketplaceRarity,
 } from '../types/marketplace';
@@ -25,20 +27,9 @@ const phpFormatter = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 });
 
-const getDiscountedPhpPrice = (item: Parameters<typeof getDiscountedMarketplacePriceDisplay>[0]) => {
-  if (item.category === 'weapon' && item.rarity === 'mythic' && item.pricePhp > 50000) {
-    return 50000;
-  }
-
-  if (item.category === 'weapon' && item.rarity === 'legendary' && item.pricePhp > 20000) {
-    return 20000;
-  }
-
-  return item.pricePhp * 0.5;
-};
-
 const MarketplacePage: React.FC = () => {
   const { items, loading, error } = useFirestoreMarketplaceItems();
+  const { pricingSettings } = useFirestoreMarketplacePricing();
   const [searchQuery, setSearchQuery] = useState('');
   const [rarityFilter, setRarityFilter] = useState<'all' | MarketplaceRarity>('all');
   const [failedThumbnailImages, setFailedThumbnailImages] = useState<Record<string, boolean>>({});
@@ -56,7 +47,10 @@ const MarketplacePage: React.FC = () => {
     }
 
     return publicItems.reduce((bestItem, currentItem) => {
-      const currentSavingsPhp = Math.max(currentItem.pricePhp - getDiscountedPhpPrice(currentItem), 0);
+      const currentSavingsPhp = Math.max(
+        currentItem.pricePhp - getDiscountedMarketplacePriceValues(currentItem, pricingSettings).php,
+        0,
+      );
 
       if (!bestItem) {
         return currentSavingsPhp > 0
@@ -70,7 +64,7 @@ const MarketplacePage: React.FC = () => {
 
       return bestItem;
     }, null as { item: (typeof publicItems)[number]; savingsPhp: number } | null);
-  }, [publicItems]);
+  }, [pricingSettings, publicItems]);
 
   const filteredItems = useMemo(() => publicItems.filter((item) => {
     const matchesSearch = [item.name, item.description]
@@ -194,7 +188,7 @@ const MarketplacePage: React.FC = () => {
 
           <div className="marketplace-list-body">
             {filteredItems.map((item) => {
-              const discountedPrice = getDiscountedMarketplacePriceDisplay(item);
+              const discountedPrice = getDiscountedMarketplacePriceDisplay(item, pricingSettings);
               const thumbnailImageKey = `${item.id ?? item.name}:${item.imageUrl}`;
               const showThumbnailImage = item.imageUrl.trim().length > 0 && !failedThumbnailImages[thumbnailImageKey];
 
