@@ -185,7 +185,7 @@ const RankingsPage: React.FC = () => {
               <tr key={member.rank} className={`rank-row rank-${member.rank}`}>
                 <td className="col-rank">
                   <span className="rank-badge">
-                    {getMedalIcon(index) || member.rank}
+                    {getMedalIcon(index) || index + 1}
                   </span>
                 </td>
                 <td className="col-name">

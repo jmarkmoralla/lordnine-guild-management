@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { onRequest } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 
@@ -11,6 +12,10 @@ const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image';
 const MAX_IMAGE_DATA_URL_LENGTH = 10 * 1024 * 1024;
 const ADMIN_ROLE = 'admin';
 const SUPER_ADMIN_ROLE = 'super_admin';
+const MARKETPLACE_PRICING_DOC_PATH = 'appSettings/marketplacePricing';
+const MARKETPLACE_RATE_ENDPOINT = 'https://api.frankfurter.dev/v2/rate/USD/PHP';
+const MARKETPLACE_RATE_SOURCE = 'frankfurter';
+const SCHEDULER_TIME_ZONE = 'Asia/Manila';
 const ADMIN_FUNCTION_OPTIONS = {
   region: REGION,
   timeoutSeconds: 60,
@@ -20,6 +25,7 @@ const ADMIN_FUNCTION_OPTIONS = {
 
 const adminCollection = () => admin.firestore().collection('admins');
 const adminAuditLogCollection = () => admin.firestore().collection('adminAuditLogs');
+const marketplacePricingDocument = () => admin.firestore().doc(MARKETPLACE_PRICING_DOC_PATH);
 
 const setCorsHeaders = (request, response, methods = ['POST', 'OPTIONS']) => {
   const origin = request.get('origin');
@@ -101,6 +107,30 @@ const writeAdminAuditLog = async ({ action, actorUid, targetUid, details = {} })
     details,
     createdAt: new Date().toISOString(),
   });
+};
+
+const fetchUsdPhpExchangeRate = async () => {
+  const response = await fetch(MARKETPLACE_RATE_ENDPOINT, {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Frankfurter request failed with status ${response.status}.`);
+  }
+
+  const payload = await response.json();
+  const rate = Number(payload?.rate);
+
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error('Frankfurter returned an invalid USD/PHP rate.');
+  }
+
+  return {
+    phpPerUsd: rate,
+    sourceDate: typeof payload?.date === 'string' ? payload.date : '',
+  };
 };
 
 const sendError = (response, status, error) => {
@@ -584,3 +614,31 @@ exports.deleteAdmin = buildFunction(['POST'], async (request, response) => {
 
   response.status(200).json({ success: true });
 });
+
+exports.syncMarketplaceExchangeRate = onSchedule(
+  {
+    region: REGION,
+    schedule: '5 0 * * *',
+    timeZone: SCHEDULER_TIME_ZONE,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    retryCount: 0,
+  },
+  async () => {
+    const fetchedAt = new Date().toISOString();
+    const exchangeRate = await fetchUsdPhpExchangeRate();
+
+    await marketplacePricingDocument().set({
+      phpPerUsd: exchangeRate.phpPerUsd,
+      source: MARKETPLACE_RATE_SOURCE,
+      sourceDate: exchangeRate.sourceDate,
+      fetchedAt,
+      updatedAt: fetchedAt,
+    }, { merge: true });
+
+    logger.info('Marketplace exchange rate synced.', {
+      phpPerUsd: exchangeRate.phpPerUsd,
+      sourceDate: exchangeRate.sourceDate,
+    });
+  }
+);

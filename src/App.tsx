@@ -17,9 +17,35 @@ import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
 import './App.css'
 
+const VALID_PAGE_KEYS = new Set([
+  'dashboard',
+  'attendance',
+  'manage-attendance',
+  'rankings',
+  'marketplace',
+  'manage-members',
+  'manage-marketplace',
+  'manage-admins',
+  'manage-boss-timer',
+  'manage-boss-notifier',
+  'relic-calculator',
+  'boss-timer',
+])
+
+const getPageFromUrl = () => {
+  const searchParams = new URLSearchParams(window.location.search)
+  const page = searchParams.get('page')
+
+  if (page && VALID_PAGE_KEYS.has(page)) {
+    return page
+  }
+
+  return 'dashboard'
+}
+
 function App() {
   const { isAdmin, role, canManageAdmins, user, logout } = useFirebaseAuth()
-  const [activePage, setActivePage] = useState('dashboard')
+  const [activePage, setActivePage] = useState(getPageFromUrl)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedMode = localStorage.getItem('darkMode')
@@ -39,6 +65,30 @@ function App() {
       document.documentElement.classList.remove('dark-mode')
     }
   }, [isDarkMode])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+
+    if (activePage === 'dashboard') {
+      url.searchParams.delete('page')
+    } else {
+      url.searchParams.set('page', activePage)
+    }
+
+    window.history.replaceState({}, '', url)
+  }, [activePage])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActivePage(getPageFromUrl())
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   const handleLogout = async () => {
     try {

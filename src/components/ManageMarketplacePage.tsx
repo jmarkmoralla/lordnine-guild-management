@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Loader, Package2, Pencil, Plus, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useFirestoreMarketplaceItems } from '../hooks/useFirestoreMarketplaceItems';
+import { useFirestoreMarketplacePricing } from '../hooks/useFirestoreMarketplacePricing';
 import {
   formatMarketplaceCategory,
   getDiscountedMarketplacePriceDisplay,
@@ -70,6 +71,7 @@ const defaultFormState = (): MarketplaceFormState => ({
 
 const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType }) => {
   const { items, loading, error, addItem, updateItem, deleteItem } = useFirestoreMarketplaceItems();
+  const { pricingSettings } = useFirestoreMarketplacePricing();
   const [searchQuery, setSearchQuery] = useState('');
   const [rarityFilter, setRarityFilter] = useState<'all' | MarketplaceRarity>('all');
   const [showItemModal, setShowItemModal] = useState(false);
@@ -364,7 +366,7 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
 
           <div className="marketplace-list-body">
             {filteredItems.map((item) => {
-              const discountedPrice = getDiscountedMarketplacePriceDisplay(item);
+              const discountedPrice = getDiscountedMarketplacePriceDisplay(item, pricingSettings);
               const thumbnailImageKey = `${item.id ?? item.name}:${item.imageUrl}`;
               const showThumbnailImage = item.imageUrl.trim().length > 0 && !failedThumbnailImages[thumbnailImageKey];
 
