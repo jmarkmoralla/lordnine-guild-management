@@ -17,6 +17,10 @@ import {
   type MarketplaceItem,
 } from '../types/marketplace';
 
+type LegacyMarketplaceItemData = Partial<MarketplaceItem> & {
+  armorSlot?: unknown;
+};
+
 interface UseFirestoreMarketplaceItemsReturn {
   items: MarketplaceItem[];
   loading: boolean;
@@ -26,8 +30,8 @@ interface UseFirestoreMarketplaceItemsReturn {
   deleteItem: (id: string) => Promise<void>;
 }
 
-const normalizeMarketplaceItem = (id: string, rawData: Partial<MarketplaceItem>): MarketplaceItem => {
-  const selection = normalizeMarketplaceSelection(rawData.category, rawData.subcategory, rawData.part, rawData.rarity);
+const normalizeMarketplaceItem = (id: string, rawData: LegacyMarketplaceItemData): MarketplaceItem => {
+  const selection = normalizeMarketplaceSelection(rawData.category, rawData.subcategory, rawData.part, rawData.rarity, rawData.armorSlot);
 
   return {
     id,
@@ -65,8 +69,8 @@ const sortMarketplaceItems = (items: MarketplaceItem[]) => (
   })
 );
 
-const createItemPayload = (item: Partial<MarketplaceItem>) => {
-  const selection = normalizeMarketplaceSelection(item.category, item.subcategory, item.part, item.rarity);
+const createItemPayload = (item: LegacyMarketplaceItemData) => {
+  const selection = normalizeMarketplaceSelection(item.category, item.subcategory, item.part, item.rarity, item.armorSlot);
   const rarity = normalizeMarketplaceRarity(item.rarity);
   const normalizedName = typeof item.name === 'string' ? item.name.trim() : '';
   const normalizedDescription = typeof item.description === 'string' ? item.description.trim() : '';
@@ -99,7 +103,7 @@ export const useFirestoreMarketplaceItems = (): UseFirestoreMarketplaceItemsRetu
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const itemData = snapshot.docs.map((itemDoc) => normalizeMarketplaceItem(itemDoc.id, itemDoc.data() as Partial<MarketplaceItem>));
+        const itemData = snapshot.docs.map((itemDoc) => normalizeMarketplaceItem(itemDoc.id, itemDoc.data() as LegacyMarketplaceItemData));
         setItems(sortMarketplaceItems(itemData));
         setLoading(false);
         setError(null);

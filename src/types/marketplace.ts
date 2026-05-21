@@ -1,8 +1,12 @@
 export const MARKETPLACE_RARITY_OPTIONS = ['epic', 'legendary', 'mythic'] as const;
 
+export const MARKETPLACE_ARMOR_PART_OPTIONS = ['helm', 'upperArmor', 'lowerArmor', 'gloves', 'boots'] as const;
+
 export const MARKETPLACE_CATEGORY_OPTIONS = [
   'weapon',
-  'armor',
+  'clothArmor',
+  'leatherArmor',
+  'plateArmor',
   'cloak',
   'accessories',
   'consumables',
@@ -10,13 +14,13 @@ export const MARKETPLACE_CATEGORY_OPTIONS = [
 
 export const MARKETPLACE_SUBCATEGORY_OPTIONS = {
   weapon: ['gauntlet', 'gadgets', 'swordAndShield', 'battleStaff', 'battleShield', 'greatsword', 'staff', 'dualDaggers', 'bow', 'crossbow'],
-  armor: ['cloth', 'leather', 'plate'],
+  clothArmor: MARKETPLACE_ARMOR_PART_OPTIONS,
+  leatherArmor: MARKETPLACE_ARMOR_PART_OPTIONS,
+  plateArmor: MARKETPLACE_ARMOR_PART_OPTIONS,
   cloak: ['battleCloak', 'destructionCloak', 'spiritCloak', 'valorCloak'],
   accessories: ['necklace', 'earrings', 'bracelet', 'ring', 'belt'],
   consumables: ['ability', 'skillbook', 'mounts'],
 } as const;
-
-export const MARKETPLACE_ARMOR_PART_OPTIONS = ['helm', 'upperArmor', 'lowerArmor', 'gloves', 'boots'] as const;
 export const MARKETPLACE_SKILLBOOK_PART_OPTIONS = [
   'bareHands',
   'swordAndShield',
@@ -94,7 +98,9 @@ export const getMarketplaceImageUrl = (
   part: MarketplacePart | null,
   rarity: MarketplaceRarity,
 ) => {
-  const pathSegments = ['/assets/images/items', category, subcategory];
+  const pathSegments = ['/assets/images/items'];
+
+  pathSegments.push(category, subcategory);
 
   if (part) {
     pathSegments.push(rarity, `${part}.png`);
@@ -163,7 +169,14 @@ export const getMarketplacePartOptions = (
     return MARKETPLACE_SKILLBOOK_PART_OPTIONS;
   }
 
-  if (category === 'weapon' || category === 'armor' || category === 'accessories' || category === 'cloak') {
+  if (
+    category === 'weapon'
+    || category === 'clothArmor'
+    || category === 'leatherArmor'
+    || category === 'plateArmor'
+    || category === 'accessories'
+    || category === 'cloak'
+  ) {
     return MARKETPLACE_ITEM_OPTION_OPTIONS[rarity];
   }
 
@@ -208,6 +221,7 @@ export const normalizeMarketplaceSelection = (
   rawSubcategory: unknown,
   rawPart: unknown,
   rawRarity: unknown,
+  rawArmorSlot?: unknown,
 ): {
   category: MarketplaceCategory;
   subcategory: MarketplaceSubcategory;
@@ -219,14 +233,23 @@ export const normalizeMarketplaceSelection = (
   let defaultSubcategory: MarketplaceSubcategory | null = null;
 
   if (legacyCategory === 'clothArmor') {
-    category = 'armor';
-    defaultSubcategory = 'cloth';
+    category = 'clothArmor';
+    defaultSubcategory = isMarketplaceArmorPart(rawSubcategory) ? rawSubcategory : isMarketplaceArmorPart(rawArmorSlot) ? rawArmorSlot : 'helm';
   } else if (legacyCategory === 'leatherArmor') {
-    category = 'armor';
-    defaultSubcategory = 'leather';
+    category = 'leatherArmor';
+    defaultSubcategory = isMarketplaceArmorPart(rawSubcategory) ? rawSubcategory : isMarketplaceArmorPart(rawArmorSlot) ? rawArmorSlot : 'helm';
   } else if (legacyCategory === 'plateArmor') {
-    category = 'armor';
-    defaultSubcategory = 'plate';
+    category = 'plateArmor';
+    defaultSubcategory = isMarketplaceArmorPart(rawSubcategory) ? rawSubcategory : isMarketplaceArmorPart(rawArmorSlot) ? rawArmorSlot : 'helm';
+  } else if (legacyCategory === 'armor') {
+    if (rawSubcategory === 'cloth') {
+      category = 'clothArmor';
+    } else if (rawSubcategory === 'leather') {
+      category = 'leatherArmor';
+    } else {
+      category = 'plateArmor';
+    }
+    defaultSubcategory = isMarketplaceArmorPart(rawArmorSlot) ? rawArmorSlot : 'helm';
   } else if (legacyCategory === 'box') {
     category = 'consumables';
     defaultSubcategory = 'ability';
@@ -247,7 +270,14 @@ export const normalizeMarketplaceSelection = (
     part = isMarketplaceSkillbookPart(rawPart)
       ? rawPart
       : getDefaultMarketplacePart(category, subcategory, rarity);
-  } else if (category === 'weapon' || category === 'armor' || category === 'accessories' || category === 'cloak') {
+  } else if (
+    category === 'weapon'
+    || category === 'clothArmor'
+    || category === 'leatherArmor'
+    || category === 'plateArmor'
+    || category === 'accessories'
+    || category === 'cloak'
+  ) {
     part = isMarketplaceItemOption(rawPart)
       ? rawPart
       : getDefaultMarketplacePart(category, subcategory, rarity);
@@ -262,7 +292,9 @@ export const formatMarketplaceRarity = (rarity: MarketplaceRarity) => (
 
 export const formatMarketplaceCategory = (category: MarketplaceCategory) => ({
   weapon: 'Weapon',
-  armor: 'Armor',
+  clothArmor: 'Cloth Armor',
+  leatherArmor: 'Leather Armor',
+  plateArmor: 'Plate Armor',
   cloak: 'Cloak',
   accessories: 'Accessories',
   consumables: 'Consumables',
@@ -279,9 +311,11 @@ export const formatMarketplaceSubcategory = (subcategory: MarketplaceSubcategory
   dualDaggers: 'Dual Daggers',
   bow: 'Bow',
   crossbow: 'Crossbow',
-  cloth: 'Cloth',
-  leather: 'Leather',
-  plate: 'Plate',
+  helm: 'Helm',
+  upperArmor: 'Upper Armor',
+  lowerArmor: 'Lower Armor',
+  gloves: 'Gloves',
+  boots: 'Boots',
   battleCloak: 'Battle Cloak',
   destructionCloak: 'Destruction Cloak',
   spiritCloak: 'Spirit Cloak',
@@ -338,7 +372,7 @@ const getItemPhpCap = (item: MarketplaceItem) => {
     return 10000;
   }
 
-  if (item.category === 'armor' && item.rarity === 'mythic') {
+  if ((item.category === 'clothArmor' || item.category === 'leatherArmor' || item.category === 'plateArmor') && item.rarity === 'mythic') {
     return 10000;
   }
 
