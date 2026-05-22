@@ -21,23 +21,76 @@ interface AttendancePageProps {
 
 type CreateAttendanceTab = 'ocr' | 'manual';
 
+type OcrMatchReason = 'exact' | 'variant' | 'token' | 'fuzzy' | 'manual' | 'none';
+type OcrRowStatus = 'matched' | 'review' | 'unmatched';
+type OcrSourceKind = 'overlay' | 'parsed';
+type OcrRowNotice = 'not_registered' | 'below_minimum_combat_power' | null;
+
+interface OcrSuggestedMember {
+  memberId: string;
+  memberName: string;
+  combatPower: number;
+  multiplier: number;
+  confidence: number;
+  reason: OcrMatchReason;
+}
+
 interface OcrAttendanceRow {
   id: string;
   detectedName: string;
+  displayName: string;
   matchedMemberId: string | null;
   matchedMemberName: string | null;
-  suggestedMemberNames: string[];
+  suggestedMembers: OcrSuggestedMember[];
   combatPower: number | null;
   multiplier: number | null;
-  status: 'matched' | 'unmatched';
+  status: OcrRowStatus;
+  matchConfidence: number;
+  matchReason: OcrMatchReason;
+  notice: OcrRowNotice;
+  autoApplied: boolean;
+  source: OcrSourceKind;
 }
 
-const OCR_ENGLISH_ONLY_SANITIZER = /[^A-Za-z0-9\s]/g;
 const DEFAULT_OCR_PROXY_PATH = '/api/ocr-space';
 const OCR_SPACE_ENDPOINT = import.meta.env.VITE_OCR_SPACE_ENDPOINT?.trim() || 'https://api.ocr.space/parse/image';
 const OCR_SPACE_API_KEY = import.meta.env.VITE_OCR_SPACE_API_KEY?.trim() || '';
+const OCR_SPACE_ENGINE = ['1', '2', '3'].includes(import.meta.env.VITE_OCR_SPACE_ENGINE?.trim() || '')
+  ? (import.meta.env.VITE_OCR_SPACE_ENGINE?.trim() as '1' | '2' | '3')
+  : '2';
+const OCR_SPACE_LANGUAGE = import.meta.env.VITE_OCR_SPACE_LANGUAGE?.trim() || (OCR_SPACE_ENGINE === '1' ? 'eng' : 'auto');
 const SHORT_OCR_NAME_MAX_LENGTH = 4;
 const SHORT_OCR_FUSE_THRESHOLD = 0.18;
+const OCR_REVIEW_MATCH_THRESHOLD = 0.72;
+const OCR_AUTO_APPLY_MATCH_THRESHOLD = 0.9;
+const OCR_SUGGESTION_THRESHOLD = 0.62;
+const OCR_MAX_IMAGE_DIMENSION = 2600;
+const OCR_RALLY_ROW_START_RATIO = 0.47;
+const OCR_RALLY_FOCUS_SIDE_INSET_RATIO = 0.012;
+const OCR_RALLY_FOCUS_BOTTOM_INSET_RATIO = 0.015;
+const OCR_LAYOUT_HEADER_SCAN_RATIO = 0.28;
+const OCR_LAYOUT_HEADER_ACTIVE_DENSITY = 0.02;
+const OCR_LAYOUT_HEADER_MIN_HEIGHT_RATIO = 0.04;
+const OCR_LAYOUT_NUMBER_LANE_WIDTH_RATIO = 0.12;
+const OCR_LAYOUT_NUMBER_LANE_ACTIVE_DENSITY = 0.09;
+const OCR_LAYOUT_NUMBER_LANE_MIN_HEIGHT_RATIO = 0.025;
+const OCR_LAYOUT_GRID_SCAN_START_RATIO = 0.08;
+const OCR_LAYOUT_GRID_DARK_THRESHOLD = 62;
+const OCR_LAYOUT_GRID_EDGE_THRESHOLD = 20;
+const OCR_LAYOUT_GRID_ROW_SCORE_THRESHOLD = 0.24;
+const OCR_LAYOUT_GRID_MIN_BAND_RATIO = 0.035;
+const OCR_LAYOUT_PANEL_DARK_THRESHOLD = 58;
+const OCR_LAYOUT_PANEL_MIN_DARK_DENSITY = 0.55;
+const OCR_LAYOUT_PANEL_MIN_HEIGHT_RATIO = 0.08;
+const OCR_LAYOUT_PANEL_TOP_DARK_DENSITY = 0.42;
+const OCR_LAYOUT_PANEL_TOP_SCAN_PADDING_RATIO = 0.18;
+const OCR_LAYOUT_NAMES_ONLY_TOP_TRIM_RATIO = 0.015;
+const OCR_LAYOUT_SAFE_TOP_RATIO = 0.35;
+const OCR_LAYOUT_ROW_ANCHOR_PADDING_RATIO = 0.01;
+const OCR_NAME_BAND_HEIGHT_RATIO = 0.68;
+const OCR_FAST_PASS_MAX_IMAGE_DIMENSION = 1800;
+const OCR_FALLBACK_PASS_MAX_IMAGE_DIMENSION = OCR_MAX_IMAGE_DIMENSION;
+const OCR_MAX_REQUEST_VARIANTS = 6;
 const OCR_CHAR_VARIANTS: Record<string, string[]> = {
   '0': ['o'],
   '1': ['i', 'l'],
@@ -48,6 +101,21 @@ const OCR_CHAR_VARIANTS: Record<string, string[]> = {
   i: ['i', 'l'],
   l: ['l', 'i'],
 };
+const OCR_COMBINING_MARKS = /[\u0300-\u036f]/g;
+const OCR_NON_ALPHANUMERIC = /[^\p{L}\p{N}]/gu;
+const OCR_NAME_TOKEN_SPLITTER = /[^\p{L}\p{N}]+/u;
+const OCR_WHITESPACE = /\s+/g;
+const OCR_UI_NOISE_PATTERNS = [
+  /manage\s*rally/i,
+  /gathering\s*point/i,
+  /not\s*registered/i,
+  /^\?+$/,
+  /human\s*hunter/i,
+  /blacksmith/i,
+  /lucky\s*guy/i,
+  /combat\s*medalist/i,
+  /secreta/i,
+];
 
 const getDefaultOcrProxyEndpoint = () => {
   const configuredEndpoint = import.meta.env.VITE_OCR_PROXY_ENDPOINT?.trim();
@@ -69,9 +137,32 @@ const getDefaultOcrProxyEndpoint = () => {
 
 const OCR_PROXY_ENDPOINT = getDefaultOcrProxyEndpoint();
 const isAttendanceEligibleByCombatPower = (combatPower: number) => Number(combatPower || 0) >= MINIMUM_ATTENDANCE_COMBAT_POWER;
+const getCreateAttendanceMultiplier = (combatPower: number) => {
+  const normalizedCombatPower = Number(combatPower || 0);
+
+  return isAttendanceEligibleByCombatPower(normalizedCombatPower)
+    ? getCombatPowerMultiplier(normalizedCombatPower)
+    : 0;
+};
 
 interface OcrSpaceParsedResult {
   ParsedText?: string;
+  TextOverlay?: {
+    Lines?: Array<{
+      MinTop?: number;
+      Words?: Array<{
+        WordText?: string;
+        Left?: number;
+        Top?: number;
+        Height?: number;
+        Width?: number;
+      }>;
+    }>;
+    HasOverlay?: boolean;
+  } | null;
+  FileParseExitCode?: string | number;
+  ErrorMessage?: string[] | string | null;
+  ErrorDetails?: string | null;
 }
 
 interface OcrSpaceResponse {
@@ -81,6 +172,75 @@ interface OcrSpaceResponse {
   ParsedResults?: OcrSpaceParsedResult[];
   error?: string;
 }
+
+interface OcrRequestOptions {
+  language: string;
+  ocrEngine: '1' | '2' | '3';
+  isOverlayRequired: boolean;
+  scale: boolean;
+  detectOrientation: boolean;
+  isTable: boolean;
+}
+
+interface OcrPreparedImageVariant {
+  cropKind: OcrCropKind;
+  kind: 'source' | 'enhanced' | 'threshold';
+  label: string;
+  imageDataUrl: string;
+  minimumLineTop?: number;
+  wave: number;
+}
+
+interface OcrVariantPlanStep {
+  kind: OcrPreparedImageVariant['kind'];
+  labelSuffix: string;
+  maxDimension: number;
+  wave: number;
+  textBand?: boolean;
+  contrast?: number;
+  threshold?: number;
+}
+
+interface OcrNameCandidate {
+  text: string;
+  source: OcrSourceKind;
+  top: number;
+}
+
+interface OcrImageBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+type OcrCropKind = 'content' | 'header-anchor' | 'number-lane' | 'names-only' | 'panel-body' | 'rally-fallback';
+
+interface OcrCropCandidate {
+  kind: OcrCropKind;
+  label: string;
+  bounds: OcrImageBounds;
+  minimumLineTop?: number;
+}
+
+interface OcrCandidateExtractionOptions {
+  minimumLineTop?: number;
+}
+
+interface OcrRowBuildResult {
+  rows: OcrAttendanceRow[];
+  autoMatchedMemberIds: string[];
+  score: number;
+}
+
+const DEFAULT_OCR_REQUEST_OPTIONS: OcrRequestOptions = {
+  language: OCR_SPACE_LANGUAGE,
+  ocrEngine: OCR_SPACE_ENGINE,
+  isOverlayRequired: OCR_SPACE_ENGINE !== '3',
+  scale: true,
+  detectOrientation: true,
+  isTable: true,
+};
 
 const getOcrErrorMessage = (error: unknown) => {
   if (error instanceof Error && error.message.trim()) {
@@ -125,22 +285,35 @@ const parseOcrResponse = async (response: Response) => {
   }
 };
 
-const normalizeOcrName = (value: string) => value
-  .toLowerCase()
+const normalizeOcrDisplayText = (value: string) => value
+  .normalize('NFKC')
+  .replace(OCR_WHITESPACE, ' ')
+  .trim();
+
+const stripOcrDiacritics = (value: string) => value
+  .normalize('NFKD')
+  .replace(OCR_COMBINING_MARKS, '');
+
+const replaceCommonOcrVariants = (value: string) => value
   .replace(/[0]/g, 'o')
   .replace(/[2]/g, 'z')
   .replace(/[5]/g, 's')
   .replace(/[6]/g, 'g')
   .replace(/[8]/g, 'b')
-  .replace(/[1]/g, 'i')
-  .replace(/[^a-z]/g, '');
+  .replace(/[1]/g, 'i');
+
+const normalizeOcrName = (value: string) => value
+  ? replaceCommonOcrVariants(stripOcrDiacritics(normalizeOcrDisplayText(value).toLowerCase()))
+    .replace(OCR_NON_ALPHANUMERIC, '')
+  : '';
 
 const normalizeOcrAlphaNumericName = (value: string) => value
-  .toLowerCase()
-  .replace(/[^a-z0-9]/g, '');
+  ? stripOcrDiacritics(normalizeOcrDisplayText(value).toLowerCase())
+    .replace(OCR_NON_ALPHANUMERIC, '')
+  : '';
 
 const getNormalizedOcrVariants = (value: string) => {
-  const sanitized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sanitized = normalizeOcrAlphaNumericName(value);
   const normalized = normalizeOcrName(sanitized);
 
   if (!normalized) return [] as string[];
@@ -179,20 +352,91 @@ const getOcrDetectedNameKey = (detectedName: string) =>
 const tokenizeOcrName = (value: string) =>
   value
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(OCR_NAME_TOKEN_SPLITTER)
     .map((token) => normalizeOcrName(token))
     .filter((token) => token.length >= 2);
 
-const extractOcrNameCandidates = (rawText: string) => {
-  return rawText
-    .split(/\r?\n/)
-    .map((line) => line.replace(OCR_ENGLISH_ONLY_SANITIZER, ' ').replace(/\s+/g, ' ').trim())
-    .filter((line) => /[a-z]/i.test(line))
-    .filter((line) => {
-      const normalizedLine = normalizeOcrName(line);
-      const normalizedAlphaNumericLine = normalizeOcrAlphaNumericName(line);
-      return normalizedLine.length >= 3 || normalizedAlphaNumericLine.length >= 3;
-    });
+const isKnownOcrUiNoise = (value: string) => {
+  const normalizedValue = normalizeOcrDisplayText(value);
+  if (!normalizedValue) return true;
+
+  return OCR_UI_NOISE_PATTERNS.some((pattern) => pattern.test(normalizedValue));
+};
+
+const isLikelyShortAlphaNumericOcrName = (value: string) => {
+  const normalizedValue = normalizeOcrDisplayText(value);
+  if (!normalizedValue) return false;
+
+  return /^[a-z]{1,3}[0-9]{1,3}$/i.test(normalizedValue) || /^[0-9]{1,3}[a-z]{1,3}$/i.test(normalizedValue);
+};
+
+const isLikelyOcrNameCandidate = (value: string) => {
+  const normalizedValue = normalizeOcrDisplayText(value);
+  const letterCount = (normalizedValue.match(/\p{L}/gu) ?? []).length;
+  const digitCount = (normalizedValue.match(/\p{N}/gu) ?? []).length;
+  const tokenCount = normalizedValue.split(OCR_WHITESPACE).filter(Boolean).length;
+
+  if (!normalizedValue || isKnownOcrUiNoise(normalizedValue)) {
+    return false;
+  }
+
+  if (isLikelyShortAlphaNumericOcrName(normalizedValue)) {
+    return true;
+  }
+
+  if (letterCount === 0 || digitCount > letterCount || tokenCount > 5) {
+    return false;
+  }
+
+  return normalizeOcrName(normalizedValue).length >= 3 || normalizeOcrAlphaNumericName(normalizedValue).length >= 3;
+};
+
+const extractParsedTextCandidates = (rawText: string) => rawText
+  .split(/\r?\n/)
+  .map((line, index) => ({
+    text: normalizeOcrDisplayText(line),
+    source: 'parsed' as const,
+    top: index * 100,
+  }))
+  .filter((candidate) => isLikelyOcrNameCandidate(candidate.text));
+
+const extractOcrNameCandidates = (ocrResult: OcrSpaceResponse, options: OcrCandidateExtractionOptions = {}) => {
+  const seenCandidateKeys = new Set<string>();
+  const minimumLineTop = Number.isFinite(options.minimumLineTop) ? Number(options.minimumLineTop) : null;
+  const overlayCandidates = (ocrResult.ParsedResults ?? [])
+    .flatMap((parsedResult, pageIndex) => (
+      parsedResult.TextOverlay?.Lines?.map((line, lineIndex) => ({
+        text: normalizeOcrDisplayText(
+          (line.Words ?? [])
+            .map((word) => normalizeOcrDisplayText(word.WordText || ''))
+            .filter(Boolean)
+            .join(' ')
+        ),
+        source: 'overlay' as const,
+        top: Number(line.MinTop ?? ((pageIndex + 1) * 10000) + lineIndex),
+      })) ?? []
+    ))
+    .filter((candidate) => (
+      (minimumLineTop === null || candidate.top >= minimumLineTop)
+      && isLikelyOcrNameCandidate(candidate.text)
+    ));
+
+  const parsedCandidates = overlayCandidates.length > 0
+    ? []
+    : (ocrResult.ParsedResults ?? [])
+      .flatMap((parsedResult) => extractParsedTextCandidates(parsedResult.ParsedText || ''));
+
+  return [...overlayCandidates, ...parsedCandidates]
+    .filter((candidate) => {
+      const candidateKey = getOcrDetectedNameKey(candidate.text);
+      if (!candidateKey || seenCandidateKeys.has(candidateKey)) {
+        return false;
+      }
+
+      seenCandidateKeys.add(candidateKey);
+      return true;
+    })
+    .sort((first, second) => first.top - second.top);
 };
 
 const readBlobAsDataUrl = (imageSource: Blob | File) => new Promise<string>((resolve, reject) => {
@@ -214,7 +458,714 @@ const readBlobAsDataUrl = (imageSource: Blob | File) => new Promise<string>((res
   reader.readAsDataURL(imageSource);
 });
 
-const requestOcrViaDirectApi = async (imageDataUrl: string) => {
+const loadImageFromDataUrl = (imageDataUrl: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve(image);
+  image.onerror = () => reject(new Error('Failed to load the image for OCR.'));
+  image.src = imageDataUrl;
+});
+
+const getCanvas2DContext = (canvas: HTMLCanvasElement) => {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    throw new Error('Unable to prepare the image for OCR.');
+  }
+
+  return context;
+};
+
+const clampColorChannel = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+
+const getAverageCornerBrightness = (imageData: ImageData) => {
+  const { data, width, height } = imageData;
+  const sampleOffsets = [
+    0,
+    (width - 1) * 4,
+    ((height - 1) * width) * 4,
+    (((height - 1) * width) + (width - 1)) * 4,
+  ];
+
+  return sampleOffsets.reduce((sum, offset) => (
+    sum + ((data[offset] + data[offset + 1] + data[offset + 2]) / 3)
+  ), 0) / sampleOffsets.length;
+};
+
+const detectImageContentBounds = (imageData: ImageData): OcrImageBounds => {
+  const { data, width, height } = imageData;
+  const backgroundBrightness = getAverageCornerBrightness(imageData);
+  const brightnessThreshold = 18;
+  const densityThreshold = 0.015;
+
+  const rowHasContent = (rowIndex: number) => {
+    let activePixels = 0;
+    for (let columnIndex = 0; columnIndex < width; columnIndex += 1) {
+      const offset = (rowIndex * width + columnIndex) * 4;
+      const brightness = (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+      if (Math.abs(brightness - backgroundBrightness) >= brightnessThreshold) {
+        activePixels += 1;
+      }
+    }
+
+    return activePixels / width >= densityThreshold;
+  };
+
+  const columnHasContent = (columnIndex: number, top: number, bottom: number) => {
+    let activePixels = 0;
+    const heightSample = Math.max(1, bottom - top + 1);
+
+    for (let rowIndex = top; rowIndex <= bottom; rowIndex += 1) {
+      const offset = (rowIndex * width + columnIndex) * 4;
+      const brightness = (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+      if (Math.abs(brightness - backgroundBrightness) >= brightnessThreshold) {
+        activePixels += 1;
+      }
+    }
+
+    return activePixels / heightSample >= densityThreshold;
+  };
+
+  let top = 0;
+  while (top < height - 1 && !rowHasContent(top)) top += 1;
+
+  let bottom = height - 1;
+  while (bottom > top && !rowHasContent(bottom)) bottom -= 1;
+
+  let left = 0;
+  while (left < width - 1 && !columnHasContent(left, top, bottom)) left += 1;
+
+  let right = width - 1;
+  while (right > left && !columnHasContent(right, top, bottom)) right -= 1;
+
+  const paddingX = Math.max(8, Math.round((right - left + 1) * 0.02));
+  const paddingY = Math.max(8, Math.round((bottom - top + 1) * 0.02));
+
+  return {
+    left: Math.max(0, left - paddingX),
+    top: Math.max(0, top - paddingY),
+    width: Math.min(width, right - left + 1 + (paddingX * 2)),
+    height: Math.min(height, bottom - top + 1 + (paddingY * 2)),
+  };
+};
+
+const clampBoundsToImage = (bounds: OcrImageBounds, imageWidth: number, imageHeight: number): OcrImageBounds => {
+  const left = Math.max(0, Math.min(imageWidth - 1, bounds.left));
+  const top = Math.max(0, Math.min(imageHeight - 1, bounds.top));
+  const right = Math.max(left + 1, Math.min(imageWidth, bounds.left + bounds.width));
+  const bottom = Math.max(top + 1, Math.min(imageHeight, bounds.top + bounds.height));
+
+  return {
+    left,
+    top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top),
+  };
+};
+
+const getPixelBrightness = (data: Uint8ClampedArray, imageWidth: number, rowIndex: number, columnIndex: number) => {
+  const offset = (rowIndex * imageWidth + columnIndex) * 4;
+  return (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+};
+
+const findHeaderBandBottom = (imageData: ImageData, contentBounds: OcrImageBounds) => {
+  const { data, width } = imageData;
+  const scanHeight = Math.max(12, Math.round(contentBounds.height * OCR_LAYOUT_HEADER_SCAN_RATIO));
+  const scanTop = contentBounds.top;
+  const scanBottom = Math.min(contentBounds.top + scanHeight, contentBounds.top + contentBounds.height - 1);
+  const rowWidth = Math.max(1, contentBounds.width);
+  const minimumHeaderHeight = Math.max(10, Math.round(contentBounds.height * OCR_LAYOUT_HEADER_MIN_HEIGHT_RATIO));
+  let activeBandStart = -1;
+
+  for (let rowIndex = scanTop; rowIndex <= scanBottom; rowIndex += 1) {
+    let activePixels = 0;
+
+    for (let columnIndex = contentBounds.left; columnIndex < contentBounds.left + contentBounds.width; columnIndex += 1) {
+      const brightness = getPixelBrightness(data, width, rowIndex, columnIndex);
+      if (brightness >= 70 || brightness <= 34) {
+        activePixels += 1;
+      }
+    }
+
+    const density = activePixels / rowWidth;
+    const isHeaderLike = density >= OCR_LAYOUT_HEADER_ACTIVE_DENSITY;
+
+    if (isHeaderLike) {
+      if (activeBandStart === -1) {
+        activeBandStart = rowIndex;
+      }
+      continue;
+    }
+
+    if (activeBandStart !== -1) {
+      const bandHeight = rowIndex - activeBandStart;
+      if (bandHeight >= minimumHeaderHeight) {
+        return rowIndex;
+      }
+      activeBandStart = -1;
+    }
+  }
+
+  if (activeBandStart !== -1) {
+    const bandHeight = (scanBottom + 1) - activeBandStart;
+    if (bandHeight >= minimumHeaderHeight) {
+      return scanBottom;
+    }
+  }
+
+  return null;
+};
+
+const findFirstNumberLaneAnchor = (imageData: ImageData, contentBounds: OcrImageBounds) => {
+  const { data, width, height } = imageData;
+  const laneWidth = Math.max(16, Math.round(contentBounds.width * OCR_LAYOUT_NUMBER_LANE_WIDTH_RATIO));
+  const laneLeft = contentBounds.left;
+  const laneRight = Math.min(width - 1, laneLeft + laneWidth - 1);
+  const lanePixelWidth = Math.max(1, laneRight - laneLeft + 1);
+  const searchTop = contentBounds.top;
+  const searchBottom = Math.min(height - 1, contentBounds.top + contentBounds.height - 1);
+  const minimumBandHeight = Math.max(10, Math.round(contentBounds.height * OCR_LAYOUT_NUMBER_LANE_MIN_HEIGHT_RATIO));
+  let activeBandStart = -1;
+
+  for (let rowIndex = searchTop; rowIndex <= searchBottom; rowIndex += 1) {
+    let bluePixels = 0;
+    let contrastPixels = 0;
+
+    for (let columnIndex = laneLeft; columnIndex <= laneRight; columnIndex += 1) {
+      const offset = (rowIndex * width + columnIndex) * 4;
+      const red = data[offset];
+      const green = data[offset + 1];
+      const blue = data[offset + 2];
+      const brightness = (red + green + blue) / 3;
+
+      if (blue >= 80 && blue >= green + 16 && blue >= red + 16) {
+        bluePixels += 1;
+      }
+
+      if (brightness >= 64 || brightness <= 38) {
+        contrastPixels += 1;
+      }
+    }
+
+    const density = ((bluePixels / lanePixelWidth) * 0.7) + ((contrastPixels / lanePixelWidth) * 0.3);
+    const isBadgeBand = density >= OCR_LAYOUT_NUMBER_LANE_ACTIVE_DENSITY;
+
+    if (isBadgeBand) {
+      if (activeBandStart === -1) {
+        activeBandStart = rowIndex;
+      }
+      continue;
+    }
+
+    if (activeBandStart !== -1) {
+      const bandHeight = rowIndex - activeBandStart;
+      if (bandHeight >= minimumBandHeight) {
+        return activeBandStart;
+      }
+      activeBandStart = -1;
+    }
+  }
+
+  if (activeBandStart !== -1) {
+    const bandHeight = (searchBottom + 1) - activeBandStart;
+    if (bandHeight >= minimumBandHeight) {
+      return activeBandStart;
+    }
+  }
+
+  return null;
+};
+
+const findFirstGridRowStart = (
+  imageData: ImageData,
+  contentBounds: OcrImageBounds,
+  startTop?: number | null,
+) => {
+  const { data, width, height } = imageData;
+  const scanLeft = Math.max(0, contentBounds.left + Math.round(contentBounds.width * 0.1));
+  const scanRight = Math.min(width - 1, contentBounds.left + contentBounds.width - Math.round(contentBounds.width * 0.04));
+  const scanWidth = Math.max(1, scanRight - scanLeft + 1);
+  const minimumBandHeight = Math.max(12, Math.round(contentBounds.height * OCR_LAYOUT_GRID_MIN_BAND_RATIO));
+  const initialTop = startTop ?? (contentBounds.top + Math.round(contentBounds.height * OCR_LAYOUT_GRID_SCAN_START_RATIO));
+  const scanTop = Math.max(contentBounds.top, Math.min(height - 1, initialTop));
+  const scanBottom = Math.min(height - 1, contentBounds.top + contentBounds.height - 1);
+  let activeBandStart = -1;
+  let activeBandDarkDensity = 0;
+
+  for (let rowIndex = scanTop; rowIndex <= scanBottom; rowIndex += 1) {
+    let darkPixels = 0;
+    let edgePixels = 0;
+    let previousBrightness: number | null = null;
+
+    for (let columnIndex = scanLeft; columnIndex <= scanRight; columnIndex += 1) {
+      const brightness = getPixelBrightness(data, width, rowIndex, columnIndex);
+
+      if (brightness <= OCR_LAYOUT_GRID_DARK_THRESHOLD) {
+        darkPixels += 1;
+      }
+
+      if (
+        previousBrightness !== null
+        && Math.abs(brightness - previousBrightness) >= OCR_LAYOUT_GRID_EDGE_THRESHOLD
+      ) {
+        edgePixels += 1;
+      }
+
+      previousBrightness = brightness;
+    }
+
+    const darkDensity = darkPixels / scanWidth;
+    const edgeDensity = edgePixels / Math.max(1, scanWidth - 1);
+    const rowScore = (darkDensity * 0.65) + (edgeDensity * 0.35);
+    const isGridBand = rowScore >= OCR_LAYOUT_GRID_ROW_SCORE_THRESHOLD && darkDensity >= 0.2;
+
+    if (isGridBand) {
+      if (activeBandStart === -1) {
+        activeBandStart = rowIndex;
+        activeBandDarkDensity = 0;
+      }
+
+      activeBandDarkDensity += darkDensity;
+      continue;
+    }
+
+    if (activeBandStart !== -1) {
+      const bandHeight = rowIndex - activeBandStart;
+      const averageDarkDensity = activeBandDarkDensity / Math.max(1, bandHeight);
+      if (bandHeight >= minimumBandHeight && averageDarkDensity >= 0.24) {
+        return activeBandStart;
+      }
+
+      activeBandStart = -1;
+      activeBandDarkDensity = 0;
+    }
+  }
+
+  if (activeBandStart !== -1) {
+    const bandHeight = (scanBottom + 1) - activeBandStart;
+    const averageDarkDensity = activeBandDarkDensity / Math.max(1, bandHeight);
+    if (bandHeight >= minimumBandHeight && averageDarkDensity >= 0.24) {
+      return activeBandStart;
+    }
+  }
+
+  return null;
+};
+
+const findManageRallyPanelBodyTop = (
+  imageData: ImageData,
+  contentBounds: OcrImageBounds,
+  headerBottom?: number | null,
+) => {
+  if (headerBottom === null || headerBottom === undefined) {
+    return null;
+  }
+
+  const { data, width, height } = imageData;
+  const scanLeft = Math.max(0, contentBounds.left + Math.round(contentBounds.width * 0.03));
+  const scanRight = Math.min(width - 1, contentBounds.left + contentBounds.width - Math.round(contentBounds.width * 0.03));
+  const scanWidth = Math.max(1, scanRight - scanLeft + 1);
+  const scanTop = Math.max(contentBounds.top, headerBottom);
+  const scanBottom = Math.min(height - 1, contentBounds.top + contentBounds.height - 1);
+  const minimumBandHeight = Math.max(14, Math.round(contentBounds.height * OCR_LAYOUT_PANEL_MIN_HEIGHT_RATIO));
+  let activeBandStart = -1;
+  let activeBandDarkDensity = 0;
+
+  for (let rowIndex = scanTop; rowIndex <= scanBottom; rowIndex += 1) {
+    let darkPixels = 0;
+
+    for (let columnIndex = scanLeft; columnIndex <= scanRight; columnIndex += 1) {
+      const brightness = getPixelBrightness(data, width, rowIndex, columnIndex);
+      if (brightness <= OCR_LAYOUT_PANEL_DARK_THRESHOLD) {
+        darkPixels += 1;
+      }
+    }
+
+    const darkDensity = darkPixels / scanWidth;
+
+    if (darkDensity >= OCR_LAYOUT_PANEL_MIN_DARK_DENSITY) {
+      if (activeBandStart === -1) {
+        activeBandStart = rowIndex;
+        activeBandDarkDensity = 0;
+      }
+
+      activeBandDarkDensity += darkDensity;
+      continue;
+    }
+
+    if (activeBandStart !== -1) {
+      const bandHeight = rowIndex - activeBandStart;
+      const averageDarkDensity = activeBandDarkDensity / Math.max(1, bandHeight);
+      if (bandHeight >= minimumBandHeight && averageDarkDensity >= OCR_LAYOUT_PANEL_MIN_DARK_DENSITY) {
+        return activeBandStart;
+      }
+
+      activeBandStart = -1;
+      activeBandDarkDensity = 0;
+    }
+  }
+
+  if (activeBandStart !== -1) {
+    const bandHeight = (scanBottom + 1) - activeBandStart;
+    const averageDarkDensity = activeBandDarkDensity / Math.max(1, bandHeight);
+    if (bandHeight >= minimumBandHeight && averageDarkDensity >= OCR_LAYOUT_PANEL_MIN_DARK_DENSITY) {
+      return activeBandStart;
+    }
+  }
+
+  return null;
+};
+
+const findManageRallyPanelBounds = (
+  imageData: ImageData,
+  contentBounds: OcrImageBounds,
+  panelBodyTop?: number | null,
+) => {
+  if (panelBodyTop === null || panelBodyTop === undefined) {
+    return null;
+  }
+
+  const { data, width, height } = imageData;
+  const scanLeft = Math.max(0, contentBounds.left + Math.round(contentBounds.width * 0.02));
+  const scanRight = Math.min(width - 1, contentBounds.left + contentBounds.width - Math.round(contentBounds.width * 0.02));
+  const scanWidth = Math.max(1, scanRight - scanLeft + 1);
+  const upwardScanPadding = Math.max(24, Math.round(contentBounds.height * OCR_LAYOUT_PANEL_TOP_SCAN_PADDING_RATIO));
+  const scanTop = Math.max(contentBounds.top, panelBodyTop - upwardScanPadding);
+  let panelTop = panelBodyTop;
+  let insidePanel = false;
+
+  for (let rowIndex = panelBodyTop; rowIndex >= scanTop; rowIndex -= 1) {
+    let darkPixels = 0;
+
+    for (let columnIndex = scanLeft; columnIndex <= scanRight; columnIndex += 1) {
+      const brightness = getPixelBrightness(data, width, rowIndex, columnIndex);
+      if (brightness <= OCR_LAYOUT_PANEL_DARK_THRESHOLD) {
+        darkPixels += 1;
+      }
+    }
+
+    const darkDensity = darkPixels / scanWidth;
+
+    if (darkDensity >= OCR_LAYOUT_PANEL_TOP_DARK_DENSITY) {
+      insidePanel = true;
+      panelTop = rowIndex;
+      continue;
+    }
+
+    if (insidePanel) {
+      break;
+    }
+  }
+
+  const clampedTop = Math.max(contentBounds.top, panelTop);
+  const clampedBounds = clampBoundsToImage({
+    left: contentBounds.left,
+    top: clampedTop,
+    width: contentBounds.width,
+    height: (contentBounds.top + contentBounds.height) - clampedTop,
+  }, width, height);
+
+  if (clampedBounds.height < Math.max(120, Math.round(contentBounds.height * 0.22))) {
+    return null;
+  }
+
+  return clampedBounds;
+};
+
+const buildOcrCropCandidates = (imageData: ImageData, contentBounds: OcrImageBounds): OcrCropCandidate[] => {
+  const { width, height } = imageData;
+  const sideInset = Math.round(contentBounds.width * OCR_RALLY_FOCUS_SIDE_INSET_RATIO);
+  const bottomInset = Math.round(contentBounds.height * OCR_RALLY_FOCUS_BOTTOM_INSET_RATIO);
+  const numberLaneAnchor = findFirstNumberLaneAnchor(imageData, contentBounds);
+  const headerBottom = findHeaderBandBottom(imageData, contentBounds);
+  const panelBodyTop = findManageRallyPanelBodyTop(imageData, contentBounds, headerBottom);
+  const panelBounds = findManageRallyPanelBounds(imageData, contentBounds, panelBodyTop);
+  const gridRowStart = findFirstGridRowStart(imageData, contentBounds, numberLaneAnchor ?? panelBodyTop ?? headerBottom);
+  const anchorPadding = Math.round(contentBounds.height * OCR_LAYOUT_ROW_ANCHOR_PADDING_RATIO);
+  const candidates = new Map<OcrCropKind, OcrCropCandidate>();
+
+  const addCandidate = (kind: OcrCropKind, label: string, nextBounds: OcrImageBounds) => {
+    const clamped = clampBoundsToImage(nextBounds, width, height);
+    if (clamped.width < Math.max(120, Math.round(contentBounds.width * 0.35))) return;
+    if (clamped.height < Math.max(80, Math.round(contentBounds.height * 0.2))) return;
+    candidates.set(kind, { kind, label, bounds: clamped });
+  };
+
+  const strictPanelTop = panelBodyTop ?? gridRowStart ?? numberLaneAnchor ?? headerBottom ?? undefined;
+
+  if (panelBounds === null) {
+    const contentMinimumTop = strictPanelTop;
+    candidates.set('content', {
+      kind: 'content',
+      label: 'content',
+      bounds: clampBoundsToImage(contentBounds, width, height),
+      minimumLineTop: contentMinimumTop === undefined ? undefined : Math.max(0, contentMinimumTop - contentBounds.top),
+    });
+  }
+
+  addCandidate('rally-fallback', 'rally-focus', {
+    left: contentBounds.left + sideInset,
+    top: contentBounds.top + Math.round(contentBounds.height * OCR_LAYOUT_SAFE_TOP_RATIO),
+    width: contentBounds.width - (sideInset * 2),
+    height: contentBounds.height - Math.round(contentBounds.height * OCR_LAYOUT_SAFE_TOP_RATIO) - bottomInset,
+  });
+
+  if (numberLaneAnchor !== null) {
+    const anchoredTop = Math.max(contentBounds.top, numberLaneAnchor - anchorPadding);
+    addCandidate('number-lane', 'number-lane', {
+      left: contentBounds.left + sideInset,
+      top: anchoredTop,
+      width: contentBounds.width - (sideInset * 2),
+      height: (contentBounds.top + contentBounds.height) - anchoredTop - bottomInset,
+    });
+  }
+
+  if (panelBounds !== null) {
+    const anchoredTop = Math.max(panelBounds.top, (gridRowStart ?? panelBodyTop ?? panelBounds.top) - anchorPadding);
+    const clampedBounds = clampBoundsToImage({
+      left: panelBounds.left + sideInset,
+      top: panelBounds.top,
+      width: panelBounds.width - (sideInset * 2),
+      height: panelBounds.height - bottomInset,
+    }, width, height);
+
+    if (
+      clampedBounds.width >= Math.max(120, Math.round(contentBounds.width * 0.35))
+      && clampedBounds.height >= Math.max(80, Math.round(contentBounds.height * 0.2))
+    ) {
+      candidates.set('panel-body', {
+        kind: 'panel-body',
+        label: 'panel-body',
+        bounds: clampedBounds,
+        minimumLineTop: Math.max(0, anchoredTop - clampedBounds.top),
+      });
+    }
+  }
+
+  if (headerBottom !== null && panelBounds === null) {
+    const anchoredTop = Math.max(contentBounds.top, (gridRowStart ?? headerBottom) - anchorPadding);
+    addCandidate('header-anchor', 'header-anchor', {
+      left: contentBounds.left + sideInset,
+      top: anchoredTop,
+      width: contentBounds.width - (sideInset * 2),
+      height: (contentBounds.top + contentBounds.height) - anchoredTop - bottomInset,
+    });
+  }
+
+  if (numberLaneAnchor === null) {
+    const namesTop = contentBounds.top + Math.round(contentBounds.height * OCR_LAYOUT_NAMES_ONLY_TOP_TRIM_RATIO);
+    addCandidate('names-only', 'names-only', {
+      left: contentBounds.left,
+      top: namesTop,
+      width: contentBounds.width,
+      height: contentBounds.height - Math.round(contentBounds.height * OCR_LAYOUT_NAMES_ONLY_TOP_TRIM_RATIO),
+    });
+  }
+
+  return ['panel-body', 'number-lane', 'header-anchor', 'names-only', 'rally-fallback', 'content']
+    .map((kind) => candidates.get(kind as OcrCropKind))
+    .filter((candidate): candidate is OcrCropCandidate => Boolean(candidate));
+};
+
+const getRallyTableFocusBounds = (contentBounds: OcrImageBounds, imageWidth: number, imageHeight: number): OcrImageBounds => {
+  const isLandscape = imageWidth >= imageHeight;
+  const isWideContent = contentBounds.width >= contentBounds.height;
+
+  if (!isLandscape || !isWideContent) {
+    return contentBounds;
+  }
+
+  const topInset = Math.round(contentBounds.height * OCR_RALLY_ROW_START_RATIO);
+  const sideInset = Math.round(contentBounds.width * OCR_RALLY_FOCUS_SIDE_INSET_RATIO);
+  const bottomInset = Math.round(contentBounds.height * OCR_RALLY_FOCUS_BOTTOM_INSET_RATIO);
+  const availableHeight = Math.max(1, contentBounds.height - topInset - bottomInset);
+  const focusedBounds = {
+    left: Math.max(0, contentBounds.left + sideInset),
+    top: Math.max(0, contentBounds.top + topInset),
+    width: Math.max(1, contentBounds.width - (sideInset * 2)),
+    height: availableHeight,
+  };
+
+  if (focusedBounds.height < Math.round(contentBounds.height * 0.45)) {
+    return contentBounds;
+  }
+
+  return focusedBounds;
+};
+
+const applyImageContrast = (imageData: ImageData, contrast = 1.35) => {
+  const nextImageData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+
+  for (let index = 0; index < nextImageData.data.length; index += 4) {
+    const grayscale = (
+      (nextImageData.data[index] * 0.299)
+      + (nextImageData.data[index + 1] * 0.587)
+      + (nextImageData.data[index + 2] * 0.114)
+    );
+    const contrasted = clampColorChannel(((grayscale - 128) * contrast) + 128);
+
+    nextImageData.data[index] = contrasted;
+    nextImageData.data[index + 1] = contrasted;
+    nextImageData.data[index + 2] = contrasted;
+  }
+
+  return nextImageData;
+};
+
+const applyImageThreshold = (imageData: ImageData, threshold = 148) => {
+  const nextImageData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+
+  for (let index = 0; index < nextImageData.data.length; index += 4) {
+    const value = nextImageData.data[index] >= threshold ? 255 : 0;
+    nextImageData.data[index] = value;
+    nextImageData.data[index + 1] = value;
+    nextImageData.data[index + 2] = value;
+  }
+
+  return nextImageData;
+};
+
+const getOcrVariantPlanForCrop = (cropKind: OcrCropKind): OcrVariantPlanStep[] => {
+  switch (cropKind) {
+    case 'panel-body':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1 },
+        { kind: 'enhanced', labelSuffix: 'enhanced', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1, contrast: 1.35 },
+        { kind: 'source', labelSuffix: 'name-band', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 2, textBand: true },
+        { kind: 'enhanced', labelSuffix: 'name-band enhanced', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 2, textBand: true, contrast: 1.45 },
+      ];
+    case 'number-lane':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1 },
+        { kind: 'threshold', labelSuffix: 'high-contrast', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1, contrast: 1.55, threshold: 148 },
+        { kind: 'enhanced', labelSuffix: 'enhanced', maxDimension: OCR_FALLBACK_PASS_MAX_IMAGE_DIMENSION, wave: 2, contrast: 1.35 },
+      ];
+    case 'names-only':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1 },
+        { kind: 'enhanced', labelSuffix: 'enhanced', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1, contrast: 1.35 },
+        { kind: 'source', labelSuffix: 'name-band', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 2, textBand: true },
+      ];
+    case 'header-anchor':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1 },
+        { kind: 'enhanced', labelSuffix: 'enhanced', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 2, contrast: 1.35 },
+      ];
+    case 'content':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: 1600, wave: 2 },
+        { kind: 'enhanced', labelSuffix: 'enhanced', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 3, contrast: 1.35 },
+      ];
+    case 'rally-fallback':
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 2 },
+        { kind: 'threshold', labelSuffix: 'high-contrast', maxDimension: OCR_FALLBACK_PASS_MAX_IMAGE_DIMENSION, wave: 3, contrast: 1.55, threshold: 148 },
+      ];
+    default:
+      return [
+        { kind: 'source', labelSuffix: '', maxDimension: OCR_FAST_PASS_MAX_IMAGE_DIMENSION, wave: 1 },
+      ];
+  }
+};
+
+const prepareOcrImageVariants = async (imageSource: Blob | File): Promise<OcrPreparedImageVariant[]> => {
+  const sourceDataUrl = await readBlobAsDataUrl(imageSource);
+  const image = await loadImageFromDataUrl(sourceDataUrl);
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = image.naturalWidth || image.width;
+  sourceCanvas.height = image.naturalHeight || image.height;
+
+  const sourceContext = getCanvas2DContext(sourceCanvas);
+  sourceContext.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
+
+  const sourceImageData = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+  const contentBounds = detectImageContentBounds(sourceImageData);
+  const cropCandidates = buildOcrCropCandidates(sourceImageData, contentBounds);
+  const prioritizedCropCandidates = cropCandidates.some((candidate) => candidate.kind === 'panel-body')
+    ? cropCandidates.filter((candidate) => candidate.kind === 'panel-body' || candidate.kind === 'number-lane').slice(0, 2)
+    : cropCandidates.some((candidate) => candidate.kind === 'number-lane')
+      ? cropCandidates.slice(0, 2)
+      : cropCandidates.slice(0, 3);
+  const preparedVariants: OcrPreparedImageVariant[] = [];
+
+  [1, 2, 3].forEach((wave) => {
+    prioritizedCropCandidates.forEach((cropCandidate) => {
+      if (preparedVariants.length >= OCR_MAX_REQUEST_VARIANTS) {
+        return;
+      }
+
+      const bounds = cropCandidate.kind === 'rally-fallback'
+        ? getRallyTableFocusBounds(contentBounds, sourceCanvas.width, sourceCanvas.height)
+        : cropCandidate.bounds;
+      const planSteps = getOcrVariantPlanForCrop(cropCandidate.kind).filter((step) => step.wave === wave);
+
+      planSteps.forEach((step) => {
+        if (preparedVariants.length >= OCR_MAX_REQUEST_VARIANTS) {
+          return;
+        }
+
+        if (step.textBand && bounds.height < 120) {
+          return;
+        }
+
+        const longestSide = Math.max(bounds.width, bounds.height);
+        const scaleFactor = Math.min(2, step.maxDimension / Math.max(1, longestSide));
+        const targetWidth = Math.max(1, Math.round(bounds.width * scaleFactor));
+        const sourceHeight = step.textBand
+          ? Math.max(1, Math.round(bounds.height * OCR_NAME_BAND_HEIGHT_RATIO))
+          : bounds.height;
+        const targetHeight = Math.max(1, Math.round(sourceHeight * scaleFactor));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = getCanvas2DContext(canvas);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(
+          sourceCanvas,
+          bounds.left,
+          bounds.top,
+          bounds.width,
+          sourceHeight,
+          0,
+          0,
+          targetWidth,
+          targetHeight,
+        );
+
+        if (step.kind === 'enhanced') {
+          context.putImageData(
+            applyImageContrast(context.getImageData(0, 0, targetWidth, targetHeight), step.contrast ?? 1.35),
+            0,
+            0,
+          );
+        }
+
+        if (step.kind === 'threshold') {
+          context.putImageData(
+            applyImageThreshold(
+              applyImageContrast(context.getImageData(0, 0, targetWidth, targetHeight), step.contrast ?? 1.55),
+              step.threshold ?? 148,
+            ),
+            0,
+            0,
+          );
+        }
+
+        preparedVariants.push({
+          cropKind: cropCandidate.kind,
+          kind: step.kind,
+          label: step.labelSuffix ? `${cropCandidate.label} (${step.labelSuffix})` : cropCandidate.label,
+          imageDataUrl: canvas.toDataURL('image/png'),
+          minimumLineTop: cropCandidate.minimumLineTop,
+          wave,
+        });
+      });
+    });
+  });
+
+  return preparedVariants;
+};
+
+const requestOcrViaDirectApi = async (imageDataUrl: string, options: OcrRequestOptions) => {
   const response = await fetch(OCR_SPACE_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -223,11 +1174,12 @@ const requestOcrViaDirectApi = async (imageDataUrl: string) => {
     },
     body: new URLSearchParams({
       base64Image: imageDataUrl,
-      language: 'eng',
-      OCREngine: '2',
-      isOverlayRequired: 'false',
-      scale: 'true',
-      detectOrientation: 'true',
+      language: options.language,
+      OCREngine: options.ocrEngine,
+      isOverlayRequired: String(options.isOverlayRequired),
+      scale: String(options.scale),
+      detectOrientation: String(options.detectOrientation),
+      isTable: String(options.isTable),
     }).toString(),
   });
 
@@ -464,6 +1416,60 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     [members]
   );
 
+  const registeredComparableMembers = useMemo(
+    () => members
+      .filter((member): member is typeof member & { id: string } => Boolean(member.id))
+      .map((member) => ({
+        ...member,
+        normalizedName: normalizeOcrName(member.name),
+        normalizedAlphaNumericName: normalizeOcrAlphaNumericName(member.name),
+        nameTokens: tokenizeOcrName(member.name),
+      })),
+    [members]
+  );
+
+  const displayLookupMembers = useMemo(
+    () => members
+      .filter((member) => member.name.trim().length > 0)
+      .map((member) => ({
+        ...member,
+        displayName: normalizeOcrDisplayText(member.name),
+        normalizedName: normalizeOcrName(member.name),
+        normalizedAlphaNumericName: normalizeOcrAlphaNumericName(member.name),
+      })),
+    [members]
+  );
+
+  const displayLookupMembersByAlphaNumericName = useMemo(() => {
+    const nextMap = new Map<string, typeof displayLookupMembers>();
+
+    displayLookupMembers.forEach((member) => {
+      if (!member.normalizedAlphaNumericName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedAlphaNumericName) ?? [];
+      nextMap.set(member.normalizedAlphaNumericName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [displayLookupMembers]);
+
+  const displayLookupMembersByNormalizedName = useMemo(() => {
+    const nextMap = new Map<string, typeof displayLookupMembers>();
+
+    displayLookupMembers.forEach((member) => {
+      if (!member.normalizedName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedName) ?? [];
+      nextMap.set(member.normalizedName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [displayLookupMembers]);
+
   const comparableMembersByAlphaNumericName = useMemo(() => {
     const nextMap = new Map<string, typeof comparableMembers>();
 
@@ -478,6 +1484,21 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     return nextMap;
   }, [comparableMembers]);
+
+  const registeredComparableMembersByAlphaNumericName = useMemo(() => {
+    const nextMap = new Map<string, typeof registeredComparableMembers>();
+
+    registeredComparableMembers.forEach((member) => {
+      if (!member.normalizedAlphaNumericName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedAlphaNumericName) ?? [];
+      nextMap.set(member.normalizedAlphaNumericName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [registeredComparableMembers]);
 
   const comparableMembersByNormalizedName = useMemo(() => {
     const nextMap = new Map<string, typeof comparableMembers>();
@@ -494,6 +1515,21 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return nextMap;
   }, [comparableMembers]);
 
+  const registeredComparableMembersByNormalizedName = useMemo(() => {
+    const nextMap = new Map<string, typeof registeredComparableMembers>();
+
+    registeredComparableMembers.forEach((member) => {
+      if (!member.normalizedName) {
+        return;
+      }
+
+      const existingMembers = nextMap.get(member.normalizedName) ?? [];
+      nextMap.set(member.normalizedName, [...existingMembers, member]);
+    });
+
+    return nextMap;
+  }, [registeredComparableMembers]);
+
   const comparableMembersByToken = useMemo(() => {
     const nextMap = new Map<string, typeof comparableMembers>();
 
@@ -506,6 +1542,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     return nextMap;
   }, [comparableMembers]);
+
+  const registeredComparableMembersByToken = useMemo(() => {
+    const nextMap = new Map<string, typeof registeredComparableMembers>();
+
+    registeredComparableMembers.forEach((member) => {
+      member.nameTokens.forEach((token) => {
+        const existingMembers = nextMap.get(token) ?? [];
+        nextMap.set(token, [...existingMembers, member]);
+      });
+    });
+
+    return nextMap;
+  }, [registeredComparableMembers]);
 
   const ocrMemberFuse = useMemo(
     () => new Fuse(comparableMembers, {
@@ -522,15 +1571,31 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     [comparableMembers]
   );
 
+  const registeredOcrMemberFuse = useMemo(
+    () => new Fuse(registeredComparableMembers, {
+      includeScore: true,
+      shouldSort: true,
+      threshold: 0.34,
+      ignoreLocation: true,
+      minMatchCharLength: 3,
+      keys: [
+        { name: 'name', weight: 0.7 },
+        { name: 'normalizedName', weight: 0.3 },
+      ],
+    }),
+    [registeredComparableMembers]
+  );
+
   const filteredOcrRows = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     if (!normalizedSearch) return ocrRows;
 
     return ocrRows.filter((row) => {
       const searchableText = [
+        row.displayName,
         row.detectedName,
         row.matchedMemberName ?? '',
-        row.suggestedMemberNames.join(' '),
+        row.suggestedMembers.map((suggestion) => suggestion.memberName).join(' '),
       ].join(' ').toLowerCase();
       return searchableText.includes(normalizedSearch);
     });
@@ -563,7 +1628,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   };
 
   const handleRemoveOcrAttendanceRow = (row: OcrAttendanceRow) => {
-    const label = row.matchedMemberName ?? row.detectedName ?? 'this OCR row';
+    const label = row.displayName || row.detectedName || 'this OCR row';
     const shouldRemove = window.confirm(`Remove ${label} from OCR attendance?`);
     if (!shouldRemove) {
       return;
@@ -597,6 +1662,190 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }
   };
 
+  const buildSuggestedMember = (
+    member: typeof comparableMembers[number],
+    confidence: number,
+    reason: OcrMatchReason
+  ): OcrSuggestedMember => ({
+    memberId: member.id,
+    memberName: member.name,
+    combatPower: Number(member.combatPower || 0),
+    multiplier: getCombatPowerMultiplier(Number(member.combatPower || 0)),
+    confidence,
+    reason,
+  });
+
+  const getOcrRowStatus = (reason: OcrMatchReason, confidence: number): OcrRowStatus => {
+    if ((reason === 'exact' || reason === 'variant') && confidence >= OCR_AUTO_APPLY_MATCH_THRESHOLD) {
+      return 'matched';
+    }
+
+    if (confidence >= OCR_REVIEW_MATCH_THRESHOLD) {
+      return 'review';
+    }
+
+    return 'unmatched';
+  };
+
+  const getUniqueDisplayLookupMember = (candidateName: string) => {
+    const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
+    const exactAlphaNumericMatches = Array.from(new Map(
+      (displayLookupMembersByAlphaNumericName.get(normalizedCandidateAlphaNumeric) ?? [])
+        .map((member) => [member.displayName, member] as const)
+    ).values());
+
+    if (exactAlphaNumericMatches.length === 1) {
+      return exactAlphaNumericMatches[0];
+    }
+
+    const exactVariantMatches = Array.from(new Map(
+      getNormalizedOcrVariants(candidateName).flatMap((variant) => (
+        (displayLookupMembersByNormalizedName.get(variant) ?? [])
+          .map((member) => [member.displayName, member] as const)
+      ))
+    ).values());
+
+    if (exactVariantMatches.length === 1) {
+      return exactVariantMatches[0];
+    }
+
+    return null;
+  };
+
+  const findBestRegisteredOcrMemberLookup = (candidateName: string) => {
+    const normalizedCandidate = normalizeOcrName(candidateName);
+    const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
+    if (!normalizedCandidate && !normalizedCandidateAlphaNumeric) return null;
+
+    const candidateTokens = tokenizeOcrName(candidateName);
+    const candidateVariants = getNormalizedOcrVariants(candidateName);
+    const isShortCandidate = Math.max(normalizedCandidate.length, normalizedCandidateAlphaNumeric.length) <= SHORT_OCR_NAME_MAX_LENGTH;
+
+    const exactAlphaNumericMatches = Array.from(new Map(
+      (registeredComparableMembersByAlphaNumericName.get(normalizedCandidateAlphaNumeric) ?? [])
+        .map((member) => [member.id, member] as const)
+    ).values());
+
+    if (exactAlphaNumericMatches.length === 1) {
+      return exactAlphaNumericMatches[0];
+    }
+
+    const exactVariantMatches = Array.from(new Map(
+      candidateVariants.flatMap((variant) => (
+        (registeredComparableMembersByNormalizedName.get(variant) ?? [])
+          .map((member) => [member.id, member] as const)
+      ))
+    ).values());
+
+    if (exactVariantMatches.length === 1) {
+      return exactVariantMatches[0];
+    }
+
+    const exactTokenMatches = Array.from(new Map(
+      candidateVariants.flatMap((variant) => (
+        (registeredComparableMembersByToken.get(variant) ?? [])
+          .map((member) => [member.id, member] as const)
+      ))
+    ).values());
+
+    if (exactTokenMatches.length === 1) {
+      return exactTokenMatches[0];
+    }
+
+    const fuseThreshold = isShortCandidate ? SHORT_OCR_FUSE_THRESHOLD : 0.34;
+    const fuseResults = registeredOcrMemberFuse.search(candidateName, { limit: isShortCandidate ? 3 : 2 });
+    const bestFuseResult = fuseResults[0];
+    const secondFuseResult = fuseResults[1];
+
+    if (
+      bestFuseResult
+      && (bestFuseResult.score ?? 1) <= fuseThreshold
+      && (!isShortCandidate || !secondFuseResult || (secondFuseResult.score ?? 1) - (bestFuseResult.score ?? 1) >= 0.04)
+    ) {
+      return bestFuseResult.item;
+    }
+
+    let bestTokenMatch = null as (typeof registeredComparableMembers)[number] | null;
+    let bestTokenScore = 0;
+
+    registeredComparableMembers.forEach((member) => {
+      if (!member.normalizedName) return;
+
+      let score = 0;
+      if (normalizedCandidate === member.normalizedName) {
+        score = 1;
+      } else if (
+        normalizedCandidate.includes(member.normalizedName)
+        || member.normalizedName.includes(normalizedCandidate)
+      ) {
+        score = 0.92;
+      } else {
+        const sharedTokens = candidateTokens.filter((token) => member.nameTokens.includes(token)).length;
+        if (sharedTokens > 0) {
+          score = sharedTokens / Math.max(candidateTokens.length, member.nameTokens.length);
+        }
+      }
+
+      if (score > bestTokenScore) {
+        bestTokenScore = score;
+        bestTokenMatch = member;
+      }
+    });
+
+    if (bestTokenScore < (isShortCandidate ? 0.9 : 0.65) || !bestTokenMatch) {
+      return null;
+    }
+
+    return bestTokenMatch;
+  };
+
+  const getOcrRowNotice = (
+    candidateName: string,
+    matchedMember: ReturnType<typeof findBestOcrMemberMatch>
+  ): OcrRowNotice => {
+    if (matchedMember) {
+      return null;
+    }
+
+    const registeredLookupMember = findBestRegisteredOcrMemberLookup(candidateName) ?? getUniqueDisplayLookupMember(candidateName);
+    if (!registeredLookupMember) {
+      return 'not_registered';
+    }
+
+    if (!isAttendanceEligibleByCombatPower(Number(registeredLookupMember.combatPower || 0))) {
+      return 'below_minimum_combat_power';
+    }
+
+    return null;
+  };
+
+  const getOcrRowNoticeMessage = (notice: OcrRowNotice) => {
+    if (notice === 'not_registered') {
+      return 'Not registered in members list.';
+    }
+
+    if (notice === 'below_minimum_combat_power') {
+      return `Registered member is below ${MINIMUM_ATTENDANCE_COMBAT_POWER.toLocaleString()} combat power.`;
+    }
+
+    return null;
+  };
+
+  const resolveCounterCheckedDisplayName = (candidateName: string, matchedMemberName?: string | null) => {
+    if (matchedMemberName) {
+      return matchedMemberName;
+    }
+
+    const normalizedCandidate = normalizeOcrDisplayText(candidateName);
+    const displayLookupMember = findBestRegisteredOcrMemberLookup(candidateName) ?? getUniqueDisplayLookupMember(candidateName);
+
+    if (displayLookupMember) {
+      return normalizeOcrDisplayText(displayLookupMember.name);
+    }
+
+    return normalizedCandidate;
+  };
+
   const findBestOcrMemberMatch = (candidateName: string, reservedMemberIds: Set<string>) => {
     const normalizedCandidate = normalizeOcrName(candidateName);
     const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
@@ -613,7 +1862,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     ).values());
 
     if (exactAlphaNumericMatches.length === 1) {
-      return exactAlphaNumericMatches[0];
+      return {
+        member: exactAlphaNumericMatches[0],
+        confidence: 1,
+        reason: 'exact' as const,
+      };
     }
 
     const exactVariantMatches = Array.from(new Map(
@@ -625,7 +1878,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     ).values());
 
     if (exactVariantMatches.length === 1) {
-      return exactVariantMatches[0];
+      return {
+        member: exactVariantMatches[0],
+        confidence: 0.97,
+        reason: 'variant' as const,
+      };
     }
 
     const exactTokenMatches = Array.from(new Map(
@@ -637,7 +1894,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     ).values());
 
     if (exactTokenMatches.length === 1) {
-      return exactTokenMatches[0];
+      return {
+        member: exactTokenMatches[0],
+        confidence: 0.88,
+        reason: 'token' as const,
+      };
     }
 
     const fuseThreshold = isShortCandidate ? SHORT_OCR_FUSE_THRESHOLD : 0.34;
@@ -654,7 +1915,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         return null;
       }
 
-      return bestFuseResult.item;
+      return {
+        member: bestFuseResult.item,
+        confidence: Math.max(0, 1 - (bestFuseResult.score ?? 1)),
+        reason: 'fuzzy' as const,
+      };
     }
 
     let bestTokenMatch = null as (typeof comparableMembers)[number] | null;
@@ -692,51 +1957,62 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       return null;
     }
 
-    return bestTokenMatch;
+    return {
+      member: bestTokenMatch,
+      confidence: bestTokenScore,
+      reason: 'token' as const,
+    };
   };
 
-  const getSuggestedOcrMemberNames = (candidateName: string, reservedMemberIds: Set<string>) => {
+  const getSuggestedOcrMembers = (
+    candidateName: string,
+    reservedMemberIds: Set<string>,
+    selectedMemberId?: string | null
+  ) => {
     const normalizedCandidate = normalizeOcrName(candidateName);
     const normalizedCandidateAlphaNumeric = normalizeOcrAlphaNumericName(candidateName);
-    if (!normalizedCandidate && !normalizedCandidateAlphaNumeric) return [] as string[];
+    if (!normalizedCandidate && !normalizedCandidateAlphaNumeric) return [] as OcrSuggestedMember[];
 
     const candidateVariants = getNormalizedOcrVariants(candidateName);
-    const suggestions = new Map<string, string>();
+    const suggestions = new Map<string, OcrSuggestedMember>();
 
     (comparableMembersByAlphaNumericName.get(normalizedCandidateAlphaNumeric) ?? []).forEach((member) => {
-      if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
-      suggestions.set(member.id, member.name);
+      if (reservedMemberIds.has(member.id) || member.id === selectedMemberId || suggestions.has(member.id)) return;
+      suggestions.set(member.id, buildSuggestedMember(member, 0.94, 'exact'));
     });
 
     candidateVariants.forEach((variant) => {
       (comparableMembersByNormalizedName.get(variant) ?? []).forEach((member) => {
-        if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
-        suggestions.set(member.id, member.name);
+        if (reservedMemberIds.has(member.id) || member.id === selectedMemberId || suggestions.has(member.id)) return;
+        suggestions.set(member.id, buildSuggestedMember(member, 0.9, 'variant'));
       });
 
       (comparableMembersByToken.get(variant) ?? []).forEach((member) => {
-        if (reservedMemberIds.has(member.id) || suggestions.has(member.id)) return;
-        suggestions.set(member.id, member.name);
+        if (reservedMemberIds.has(member.id) || member.id === selectedMemberId || suggestions.has(member.id)) return;
+        suggestions.set(member.id, buildSuggestedMember(member, 0.8, 'token'));
       });
     });
 
     if (suggestions.size < 3) {
       ocrMemberFuse.search(candidateName, { limit: 5 }).forEach((result) => {
-        if ((result.score ?? 1) > 0.25) return;
-        if (reservedMemberIds.has(result.item.id) || suggestions.has(result.item.id)) return;
-        suggestions.set(result.item.id, result.item.name);
+        const confidence = Math.max(0, 1 - (result.score ?? 1));
+        if (confidence < OCR_SUGGESTION_THRESHOLD) return;
+        if (reservedMemberIds.has(result.item.id) || result.item.id === selectedMemberId || suggestions.has(result.item.id)) return;
+        suggestions.set(result.item.id, buildSuggestedMember(result.item, confidence, 'fuzzy'));
       });
     }
 
-    return [...suggestions.values()].slice(0, 3);
+    return [...suggestions.values()]
+      .sort((first, second) => second.confidence - first.confidence)
+      .slice(0, 3);
   };
 
-  const applyOcrTextToAttendance = (rawText: string, sourceLabel: string) => {
-    const candidates = extractOcrNameCandidates(rawText);
+  const buildOcrRowsFromCandidates = (candidates: OcrNameCandidate[]): OcrRowBuildResult => {
     const seenRowKeys = new Set<string>();
     const seenDetectedNameKeys = new Set<string>();
     const reservedMemberIds = new Set(
       ocrRows
+        .filter((row) => row.autoApplied)
         .map((row) => row.matchedMemberId)
         .filter((memberId): memberId is string => Boolean(memberId))
     );
@@ -746,16 +2022,37 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         .filter(Boolean)
     );
     const nextRows: OcrAttendanceRow[] = [];
+    const autoMatchedMemberIds = [] as string[];
 
-    candidates.forEach((candidateName, index) => {
+    candidates.forEach((candidate, index) => {
+      const candidateName = candidate.text;
       const detectedNameKey = getOcrDetectedNameKey(candidateName);
       if (!detectedNameKey || seenDetectedNameKeys.has(detectedNameKey) || existingDetectedNameKeys.has(detectedNameKey)) {
         return;
       }
 
       const matchedMember = findBestOcrMemberMatch(candidateName, reservedMemberIds);
+      const registeredLookupMember = matchedMember?.member
+        ?? findBestRegisteredOcrMemberLookup(candidateName)
+        ?? getUniqueDisplayLookupMember(candidateName);
+      const registeredLookupMemberId = registeredLookupMember?.id ?? null;
+      const rowNotice = getOcrRowNotice(candidateName, matchedMember);
+      const belowMinimumRegisteredMatch = !matchedMember
+        && rowNotice === 'below_minimum_combat_power'
+        && registeredLookupMember
+        && registeredLookupMemberId !== null
+        && !reservedMemberIds.has(registeredLookupMemberId);
+      const resolvedMatchedMember = matchedMember?.member ?? (belowMinimumRegisteredMatch ? registeredLookupMember : null);
+      const rowStatus = matchedMember
+        ? getOcrRowStatus(matchedMember.reason, matchedMember.confidence)
+        : belowMinimumRegisteredMatch
+          ? 'matched'
+          : 'unmatched';
+      const autoApplied = rowStatus === 'matched';
+      const resolvedMatchConfidence = matchedMember?.confidence ?? (belowMinimumRegisteredMatch ? 1 : 0);
+      const resolvedMatchReason = matchedMember?.reason ?? (belowMinimumRegisteredMatch ? 'exact' : 'none');
       const rowKey = getOcrRowKey({
-        matchedMemberId: matchedMember?.id ?? null,
+        matchedMemberId: autoApplied ? resolvedMatchedMember?.id ?? null : null,
         detectedName: candidateName,
       });
 
@@ -765,21 +2062,48 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
       seenRowKeys.add(rowKey);
       seenDetectedNameKeys.add(detectedNameKey);
-      if (matchedMember?.id) {
-        reservedMemberIds.add(matchedMember.id);
+      if (resolvedMatchedMember?.id && autoApplied) {
+        reservedMemberIds.add(resolvedMatchedMember.id);
+        autoMatchedMemberIds.push(resolvedMatchedMember.id);
       }
+
+      const resolvedCombatPower = registeredLookupMember ? Number(registeredLookupMember.combatPower || 0) : null;
+      const resolvedMultiplier = resolvedCombatPower === null
+        ? null
+        : getCreateAttendanceMultiplier(resolvedCombatPower);
 
       nextRows.push({
         id: `${index}-${normalizeOcrName(candidateName)}`,
         detectedName: candidateName,
-        matchedMemberId: matchedMember?.id ?? null,
-        matchedMemberName: matchedMember?.name ?? null,
-        suggestedMemberNames: matchedMember ? [] : getSuggestedOcrMemberNames(candidateName, reservedMemberIds),
-        combatPower: matchedMember ? Number(matchedMember.combatPower || 0) : null,
-        multiplier: matchedMember ? getCombatPowerMultiplier(Number(matchedMember.combatPower || 0)) : null,
-        status: matchedMember ? 'matched' : 'unmatched',
+        displayName: resolveCounterCheckedDisplayName(candidateName, resolvedMatchedMember?.name ?? null),
+        matchedMemberId: resolvedMatchedMember?.id ?? null,
+        matchedMemberName: resolvedMatchedMember?.name ?? null,
+        suggestedMembers: getSuggestedOcrMembers(candidateName, reservedMemberIds, resolvedMatchedMember?.id ?? null),
+        combatPower: resolvedCombatPower,
+        multiplier: resolvedMultiplier,
+        status: rowStatus,
+        matchConfidence: resolvedMatchConfidence,
+        matchReason: resolvedMatchReason,
+        notice: rowNotice,
+        autoApplied,
+        source: candidate.source,
       });
     });
+
+    const score = nextRows.reduce((total, row) => {
+      const statusWeight = row.status === 'matched' ? 140 : row.status === 'review' ? 70 : 15;
+      return total + statusWeight + Math.round(row.matchConfidence * 20);
+    }, 0);
+
+    return {
+      rows: nextRows,
+      autoMatchedMemberIds,
+      score,
+    };
+  };
+
+  const applyBuiltOcrRows = (rowBuildResult: OcrRowBuildResult, sourceLabel: string) => {
+    const { rows: nextRows, autoMatchedMemberIds } = rowBuildResult;
 
     setCreateAttendanceTab('ocr');
 
@@ -810,23 +2134,145 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     });
     setOcrRows(mergedRows);
 
-    const matchedMemberIds = mergedRows
-      .map((row) => row.matchedMemberId)
-      .filter((memberId): memberId is string => Boolean(memberId));
-
     setDraftAttendanceByMemberId((current) => {
       const nextDraft = { ...current };
-      matchedMemberIds.forEach((memberId) => {
+      autoMatchedMemberIds.forEach((memberId) => {
         nextDraft[memberId] = 'present';
       });
       return nextDraft;
     });
 
     setOcrError(
-      matchedMemberIds.length > 0
+      autoMatchedMemberIds.length > 0
         ? null
-        : 'OCR completed, but none of the detected names matched the current member list.'
+        : 'OCR completed, but no high-confidence matches were auto-applied. Review the suggested names before saving.'
     );
+  };
+
+  const handleApplySuggestedOcrMember = (rowId: string, suggestion: OcrSuggestedMember) => {
+    setOcrRows((current) => current.map((row) => {
+      if (row.id !== rowId) {
+        return row;
+      }
+
+      return {
+        ...row,
+        displayName: suggestion.memberName,
+        matchedMemberId: suggestion.memberId,
+        matchedMemberName: suggestion.memberName,
+        combatPower: suggestion.combatPower,
+        multiplier: suggestion.multiplier,
+        status: 'matched',
+        matchConfidence: Math.max(row.matchConfidence, suggestion.confidence),
+        matchReason: 'manual',
+        autoApplied: true,
+        suggestedMembers: row.suggestedMembers.filter((candidate) => candidate.memberId !== suggestion.memberId),
+      };
+    }));
+
+    setDraftAttendanceByMemberId((current) => ({
+      ...current,
+      [suggestion.memberId]: 'present',
+    }));
+
+    setOcrError(null);
+  };
+
+  const isGoodEnoughOcrResult = (result: OcrRowBuildResult) => {
+    const matchedCount = result.rows.filter((row) => row.status === 'matched').length;
+    const reviewCount = result.rows.filter((row) => row.status === 'review').length;
+    const actionableCount = matchedCount + reviewCount;
+    const totalRows = result.rows.length;
+
+    if (matchedCount >= 2) return true;
+    if (actionableCount >= 3) return true;
+    if (totalRows >= 4 && actionableCount / totalRows >= 0.6) return true;
+
+    return false;
+  };
+
+  const scoreOcrResult = (result: OcrRowBuildResult) => {
+    const matchedCount = result.rows.filter((row) => row.status === 'matched').length;
+    const reviewCount = result.rows.filter((row) => row.status === 'review').length;
+    const unmatchedCount = result.rows.filter((row) => row.status === 'unmatched').length;
+    const confidenceSum = result.rows.reduce((sum, row) => sum + row.matchConfidence, 0);
+
+    return (
+      matchedCount * 100
+      + reviewCount * 40
+      + confidenceSum * 10
+      - unmatchedCount * 5
+    );
+  };
+
+  const scoreOcrResultForVariant = (result: OcrRowBuildResult, variant: OcrPreparedImageVariant) => {
+    const matchedCount = result.rows.filter((row) => row.status === 'matched').length;
+    const reviewCount = result.rows.filter((row) => row.status === 'review').length;
+    const unmatchedCount = result.rows.filter((row) => row.status === 'unmatched').length;
+    let score = scoreOcrResult(result);
+
+    if (variant.cropKind === 'panel-body') {
+      score += 20;
+    }
+
+    if (variant.cropKind === 'content' || variant.cropKind === 'header-anchor') {
+      score -= unmatchedCount * 12;
+
+      if (matchedCount === 0 && reviewCount < 2) {
+        score -= 35;
+      }
+    }
+
+    if (variant.cropKind === 'rally-fallback') {
+      score -= 12;
+    }
+
+    if (variant.cropKind === 'number-lane') {
+      score += 8;
+    }
+
+    return score;
+  };
+
+  const requestOcrVariant = async (idToken: string, imageDataUrl: string): Promise<OcrSpaceResponse> => {
+    try {
+      const response = await fetch(OCR_PROXY_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageDataUrl,
+          ...DEFAULT_OCR_REQUEST_OPTIONS,
+        }),
+      });
+
+      const parsedResponse = await parseOcrResponse(response);
+
+      if (!response.ok) {
+        const fallbackMessage = parsedResponse.rawText.trim()
+          ? parsedResponse.rawText.trim().slice(0, 200)
+          : `OCR proxy request failed with status ${response.status}`;
+        throw new Error(parsedResponse.payload?.error || fallbackMessage);
+      }
+
+      if (!parsedResponse.payload) {
+        throw new Error(
+          OCR_PROXY_ENDPOINT === DEFAULT_OCR_PROXY_PATH
+            ? 'OCR proxy is unavailable on this server. Set VITE_OCR_PROXY_ENDPOINT or run the app through Firebase Hosting.'
+            : 'OCR proxy returned an empty response.'
+        );
+      }
+
+      return parsedResponse.payload;
+    } catch (proxyError) {
+      if (!canUseDirectOcrSpaceFallback()) {
+        throw proxyError;
+      }
+
+      return requestOcrViaDirectApi(imageDataUrl, DEFAULT_OCR_REQUEST_OPTIONS);
+    }
   };
 
   const processOcrImage = async (imageSource: Blob | File, sourceLabel: string) => {
@@ -843,60 +2289,53 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       }
 
       const idToken = await currentUser.getIdToken();
-      const imageDataUrl = await readBlobAsDataUrl(imageSource);
+      const preparedVariants = await prepareOcrImageVariants(imageSource);
+      let bestResult: OcrRowBuildResult | null = null;
+      let bestVariantLabel = sourceLabel;
+      let bestScore = -Infinity;
+      let lastRequestError: unknown = null;
 
-      let result: OcrSpaceResponse | null = null;
+      for (const variant of preparedVariants) {
+        try {
+          const result = await requestOcrVariant(idToken, variant.imageDataUrl);
 
-      try {
-        const response = await fetch(OCR_PROXY_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            imageDataUrl,
-            language: 'eng',
-          }),
-        });
-
-        const parsedResponse = await parseOcrResponse(response);
-        if (!response.ok) {
-          const fallbackMessage = parsedResponse.rawText.trim()
-            ? parsedResponse.rawText.trim().slice(0, 200)
-            : `OCR proxy request failed with status ${response.status}`;
-          throw new Error(parsedResponse.payload?.error || fallbackMessage);
+        if (result.IsErroredOnProcessing) {
+          const errorMessage = Array.isArray(result.ErrorMessage)
+            ? result.ErrorMessage.join(' ')
+            : result.ErrorMessage;
+            throw new Error(errorMessage || result.ErrorDetails || 'OCR.space failed to process the image.');
         }
 
-        if (!parsedResponse.payload) {
-          throw new Error(
-            OCR_PROXY_ENDPOINT === DEFAULT_OCR_PROXY_PATH
-              ? 'OCR proxy is unavailable on this server. Set VITE_OCR_PROXY_ENDPOINT or run the app through Firebase Hosting.'
-              : 'OCR proxy returned an empty response.'
-          );
-        }
+        const builtRows = buildOcrRowsFromCandidates(extractOcrNameCandidates(result, {
+          minimumLineTop: variant.minimumLineTop,
+        }));
+          const score = scoreOcrResultForVariant(builtRows, variant);
 
-        result = parsedResponse.payload;
-      } catch (proxyError) {
-        if (!canUseDirectOcrSpaceFallback()) {
-          throw proxyError;
-        }
+          if (score > bestScore) {
+            bestScore = score;
+          bestResult = builtRows;
+            bestVariantLabel = variant.label.startsWith('grayscale-contrast')
+              ? sourceLabel
+              : `${sourceLabel} (${variant.label})`;
+          }
 
-        result = await requestOcrViaDirectApi(imageDataUrl);
+          if (isGoodEnoughOcrResult(builtRows)) {
+            applyBuiltOcrRows(builtRows, bestVariantLabel);
+            return;
+          }
+        } catch (variantError) {
+          lastRequestError = variantError;
+        }
       }
 
-      if (result.IsErroredOnProcessing) {
-        const errorMessage = Array.isArray(result.ErrorMessage)
-          ? result.ErrorMessage.join(' ')
-          : result.ErrorMessage;
-        throw new Error(errorMessage || result.ErrorDetails || 'OCR.space failed to process the image.');
+      if (bestResult) {
+        applyBuiltOcrRows(bestResult, bestVariantLabel);
+        return;
       }
 
-      const parsedText = (result.ParsedResults ?? [])
-        .map((entry) => entry.ParsedText || '')
-        .join('\n');
-
-      applyOcrTextToAttendance(parsedText, sourceLabel);
+      throw lastRequestError instanceof Error
+        ? lastRequestError
+        : new Error('OCR did not return any usable results.');
     } catch (ocrProcessingError) {
       console.error('Failed to process OCR image:', ocrProcessingError);
       setOcrError(getOcrErrorMessage(ocrProcessingError));
@@ -1098,14 +2537,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       : selectedBossNames.filter((selectedBossName) => bossNameOptions.includes(selectedBossName));
 
     const membersToPersist = members
-      .filter((member): member is typeof member & { id: string } => Boolean(member.id))
-      .filter((member) => isAttendanceEligibleByCombatPower(member.combatPower));
+      .filter((member): member is typeof member & { id: string } => Boolean(member.id));
 
     const presentMembersForSummary = membersToPersist
       .filter((member) => draftAttendanceByMemberId[member.id] === 'present')
       .map((member) => ({
         name: member.name,
-        multiplier: getCombatPowerMultiplier(Number(member.combatPower || 0)),
+        multiplier: getCreateAttendanceMultiplier(Number(member.combatPower || 0)),
       }))
       .filter((member) => Boolean(member.name));
 
@@ -1135,7 +2573,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             const draftStatus = draftAttendanceByMemberId[member.id] || 'unmarked';
 
             if (draftStatus === 'present') {
-              const multiplier = getCombatPowerMultiplier(Number(member.combatPower || 0));
+              const multiplier = getCreateAttendanceMultiplier(Number(member.combatPower || 0));
               await upsertAttendance(member.id, member.name, 'present', multiplier, selectedBossName);
             }
           })
@@ -1150,7 +2588,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         );
       }
 
-      setIsCreateAttendanceOpen(false);
       closeCreateAttendanceModal();
     } catch (error) {
       console.error('Failed to sync attendance summary:', error);
@@ -1188,10 +2625,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         const normalizedName = member.name.trim().toLowerCase();
         const combatPower = Number(member.combatPower || 0);
 
-        const computedMultiplier = getCombatPowerMultiplier(combatPower);
+        const computedMultiplier = getCreateAttendanceMultiplier(combatPower);
 
         return [normalizedName, computedMultiplier] as const;
       })
+    );
+    const memberCombatPowerByName = new Map(
+      members.map((member) => [member.name.trim().toLowerCase(), Number(member.combatPower || 0)] as const)
     );
 
     const rowsWithMemberTotals = summaryRows.map((row) => {
@@ -1200,12 +2640,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         + Number(row.fieldBoss || 0)
         + Number(row.guildBoss || 0)
         + Number(row.guildvsguild || 0);
-      const computedMultiplier = memberMultiplierByName.get(row.name.trim().toLowerCase()) ?? 1.0;
+      const normalizedRowName = row.name.trim().toLowerCase();
+      const computedMultiplier = memberMultiplierByName.get(normalizedRowName) ?? 1.0;
+      const memberCombatPower = memberCombatPowerByName.get(normalizedRowName) ?? null;
 
       return {
         ...row,
         computedTotalAttendance,
         computedMultiplier,
+        memberCombatPower,
       };
     });
 
@@ -1418,10 +2861,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               <td className="member-rank">
                 {canManage && isCreateAttendanceOpen ? index + 1 : member.rank}
               </td>
-              <td className="member-name">{member.name}</td>
+              <td className="member-name">
+                <div className="attendance-member-name-cell">
+                  <div className="attendance-member-name-primary">{member.name}</div>
+                  {!isAttendanceEligibleByCombatPower(Number(member.combatPower || 0)) && (
+                    <div className="attendance-member-name-warning">
+                      Below {MINIMUM_ATTENDANCE_COMBAT_POWER.toLocaleString()} combat power
+                    </div>
+                  )}
+                </div>
+              </td>
               <td className="member-date member-combat-power">{Number(member.combatPower || 0).toLocaleString()}</td>
               <td className="member-date member-pts">{displayedAttendancePoints}</td>
-              <td className="member-date member-multiplier">{getCombatPowerMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
+              <td className="member-date member-multiplier">{getCreateAttendanceMultiplier(Number(member.combatPower || 0)).toFixed(1)}</td>
               <td className="member-date">{selectedDate}</td>
               <td className="member-status">
                 {getStatusBadge(member.attendanceStatus)}
@@ -1439,10 +2891,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                           event.target.checked
                         )
                       }
-                      disabled={
-                        !member.id
-                        || (isCreateAttendanceOpen && !isAttendanceEligibleByCombatPower(member.combatPower))
-                      }
+                      disabled={!member.id}
                     />
                   </label>
                 </td>
@@ -1655,7 +3104,16 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             <tbody>
               {manageSummaryRowsComputed.map((row) => (
                 <tr key={row.id}>
-                  <td className="member-name">{row.name}</td>
+                  <td className="member-name">
+                    <div className="attendance-summary-member-name-cell">
+                      <div className="attendance-summary-member-name-primary">{row.name}</div>
+                      {row.memberCombatPower !== null && !isAttendanceEligibleByCombatPower(row.memberCombatPower) && (
+                        <div className="attendance-summary-member-name-warning">
+                          Below {MINIMUM_ATTENDANCE_COMBAT_POWER.toLocaleString()} combat power
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="member-date">{row.kransia}</td>
                   <td className="member-date">{row.fieldBoss}</td>
                   <td className="member-date">{row.guildBoss}</td>
@@ -1723,7 +3181,16 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             <tbody>
               {guestSummaryRowsComputed.map((row) => (
                 <tr key={row.id}>
-                  <td className="member-name">{row.name}</td>
+                  <td className="member-name">
+                    <div className="attendance-summary-member-name-cell">
+                      <div className="attendance-summary-member-name-primary">{row.name}</div>
+                      {row.memberCombatPower !== null && !isAttendanceEligibleByCombatPower(row.memberCombatPower) && (
+                        <div className="attendance-summary-member-name-warning">
+                          Below {MINIMUM_ATTENDANCE_COMBAT_POWER.toLocaleString()} combat power
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="member-date">{row.kransia}</td>
                   <td className="member-date">{row.fieldBoss}</td>
                   <td className="member-date">{row.guildBoss}</td>
@@ -1839,10 +3306,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       )}
 
       {canManage && isCreateAttendanceOpen && (
-        <div
-          className="attendance-modal-overlay"
-          onClick={closeCreateAttendanceModal}
-        >
+        <div className="attendance-modal-overlay">
           <div className="attendance-modal-content" onClick={(event) => event.stopPropagation()}>
             <div className="attendance-modal-header">
               <h3>Create Attendance</h3>
@@ -2062,14 +3526,17 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                           <td className="member-rank">{index + 1}</td>
                           <td className="member-name attendance-ocr-member-name-cell">
                             <div className="attendance-ocr-member-name-primary">
-                              {row.matchedMemberName ?? row.detectedName}
+                              {row.displayName}
                             </div>
-                            {row.matchedMemberName && row.detectedName !== row.matchedMemberName && (
+                            {row.detectedName !== row.displayName && (
                               <div className="attendance-ocr-member-name-secondary">Detected: {row.detectedName}</div>
                             )}
-                            {!row.matchedMemberName && row.suggestedMemberNames.length > 0 && (
+                            <div className="attendance-ocr-member-name-secondary">
+                              Confidence: {Math.round(row.matchConfidence * 100)}%
+                            </div>
+                            {getOcrRowNoticeMessage(row.notice) && (
                               <div className="attendance-ocr-member-name-secondary">
-                                Suggestions: {row.suggestedMemberNames.join(', ')}
+                                {getOcrRowNoticeMessage(row.notice)}
                               </div>
                             )}
                           </td>
@@ -2082,15 +3549,33 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                           </td>
                           <td className="member-status">
                             <span className={`attendance-ocr-status-badge attendance-ocr-status-${row.status}`}>
-                              {row.status === 'matched' ? 'Present' : 'Unmatched'}
+                              {row.status === 'matched' ? 'Present' : row.status === 'review' ? 'Review' : 'Unmatched'}
                             </span>
                           </td>
                           <td className="member-action">
+                            {row.status === 'review' && row.matchedMemberId && row.matchedMemberName && (
+                              <button
+                                type="button"
+                                className="attendance-ocr-inline-upload-btn attendance-ocr-approve-btn"
+                                onClick={() => handleApplySuggestedOcrMember(row.id, {
+                                  memberId: row.matchedMemberId as string,
+                                  memberName: row.matchedMemberName as string,
+                                  combatPower: Number(row.combatPower || 0),
+                                  multiplier: Number(row.multiplier ?? 1),
+                                  confidence: row.matchConfidence,
+                                  reason: row.matchReason,
+                                })}
+                                aria-label={`Approve ${row.displayName} OCR match`}
+                                title="Approve OCR match"
+                              >
+                                <Check size={16} strokeWidth={2.2} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="details-delete-btn attendance-ocr-remove-btn"
                               onClick={() => handleRemoveOcrAttendanceRow(row)}
-                              aria-label={`Remove ${row.matchedMemberName ?? row.detectedName} from OCR attendance`}
+                              aria-label={`Remove ${row.displayName} from OCR attendance`}
                               title="Remove from OCR attendance"
                             >
                               <X className="details-delete-icon" size={16} strokeWidth={2.2} />
@@ -2110,7 +3595,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 </div>
 
                 <p className="attendance-ocr-reminder-note">
-                  Reminder: Double check whether names with 3 letters are included correctly in the OCR read.
+                  Reminder: Double check whether all names in the screenshot were included.
                 </p>
               </div>
             ) : (
@@ -2198,7 +3683,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         <td className="details-cell-pts">
                           {getAttendancePoints(attendance.attendanceType, attendance.bossName)}
                         </td>
-                        <td className="details-cell-multiplier">{Number(attendance.multiplier || 1).toFixed(1)}</td>
+                        <td className="details-cell-multiplier">{Number(attendance.multiplier ?? 1).toFixed(1)}</td>
                         <td className="details-cell-date">{formatAttendanceDateOnly(attendance.attendanceDate)}</td>
                         <td className="details-cell-status">{getStatusBadge(attendance.status)}</td>
                         {canManage && (

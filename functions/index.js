@@ -269,7 +269,15 @@ exports.ocrSpaceProxy = onRequest(
         return;
       }
 
-      const { imageDataUrl, language = 'eng' } = parseJsonBody(request);
+      const {
+        imageDataUrl,
+        language = 'auto',
+        ocrEngine = '2',
+        isOverlayRequired = true,
+        scale = true,
+        detectOrientation = true,
+        isTable = true,
+      } = parseJsonBody(request);
       if (typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image/')) {
         sendError(response, 400, 'A valid image data URL is required.');
         return;
@@ -283,10 +291,11 @@ exports.ocrSpaceProxy = onRequest(
       const upstreamBody = new URLSearchParams({
         base64Image: imageDataUrl,
         language,
-        OCREngine: '2',
-        isOverlayRequired: 'false',
-        scale: 'true',
-        detectOrientation: 'true',
+        OCREngine: ['1', '2', '3'].includes(String(ocrEngine)) ? String(ocrEngine) : '2',
+        isOverlayRequired: String(Boolean(isOverlayRequired) && String(ocrEngine) !== '3'),
+        scale: String(Boolean(scale)),
+        detectOrientation: String(Boolean(detectOrientation)),
+        isTable: String(Boolean(isTable)),
       });
 
       const upstreamResponse = await fetch(OCR_SPACE_ENDPOINT, {

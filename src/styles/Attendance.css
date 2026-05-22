@@ -853,6 +853,27 @@
   cursor: not-allowed;
 }
 
+.attendance-ocr-approve-btn {
+  min-width: 32px;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border-radius: 7px;
+  border-color: rgba(28, 140, 82, 0.28);
+  background: #1f9d61;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(31, 157, 97, 0.22);
+}
+
+.attendance-ocr-approve-btn:hover:not(:disabled) {
+  border-color: rgba(28, 140, 82, 0.4);
+  background: #188553;
+  box-shadow: 0 10px 22px rgba(24, 133, 83, 0.26);
+}
+
 .attendance-ocr-paste-hint {
   font-size: 0.72rem;
   color: var(--text-secondary);
@@ -974,6 +995,10 @@
 
 .attendance-ocr-table .details-delete-btn.attendance-ocr-remove-btn .details-delete-icon {
   color: #ffffff;
+}
+
+.attendance-ocr-table td.member-action button + button {
+  margin-left: 0.45rem;
 }
 
 .attendance-ocr-member-name-cell {
@@ -1364,6 +1389,28 @@
   color: var(--text-primary);
 }
 
+.attendance-member-name-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  white-space: normal;
+  width: 100%;
+}
+
+.attendance-member-name-primary {
+  font-weight: 600;
+  color: inherit;
+}
+
+.attendance-member-name-warning {
+  margin-top: 0.18rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #d85b5b;
+}
+
 .member-rank {
   font-weight: 600;
   color: var(--text-secondary);
@@ -1394,6 +1441,26 @@
   width: 220px;
   min-width: 220px;
   text-align: left;
+}
+
+.attendance-summary-member-name-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.14rem;
+  white-space: normal;
+}
+
+.attendance-summary-member-name-primary {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.attendance-summary-member-name-warning {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #d85b5b;
 }
 
 .attendance-summary-main .attendance-table tfoot td {
