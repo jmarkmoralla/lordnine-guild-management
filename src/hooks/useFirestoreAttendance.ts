@@ -138,6 +138,7 @@ export const useFirestoreAttendance = (
     const targetBossName = (bossNameOverride || bossName).trim();
     const attendanceDateTime = buildAttendanceDateTime(date);
     const attendanceDocId = buildAttendanceDocId(attendanceDateTime, memberId, attendanceType, targetBossName);
+    const normalizedMultiplier = Number(multiplier);
     await setDoc(
       doc(db, 'guildAttendance', attendanceDocId),
       {
@@ -147,7 +148,7 @@ export const useFirestoreAttendance = (
         bossName: targetBossName,
         attendanceDate: attendanceDateTime,
         status: toFirestoreStatus(status),
-        multiplier: Number(multiplier) || 1,
+        multiplier: Number.isFinite(normalizedMultiplier) ? normalizedMultiplier : 1,
       },
       { merge: true }
     );

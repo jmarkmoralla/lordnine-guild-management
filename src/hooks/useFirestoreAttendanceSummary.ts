@@ -150,7 +150,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       if (!normalizedName) return;
 
       const normalizedMultiplier = Number(multiplier);
-      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
+      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier >= 0
         ? normalizedMultiplier
         : 1;
       const weightedAttendancePoints = effectiveAttendancePoints * effectiveMultiplier;
@@ -232,7 +232,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       if (!targetField) return;
 
       const normalizedMultiplier = Number(data.multiplier ?? 1);
-      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier > 0
+      const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier >= 0
         ? normalizedMultiplier
         : 1;
       nextValues[targetField] += getAttendancePoints(data.attendanceType || '', data.bossName || '') * effectiveMultiplier;
