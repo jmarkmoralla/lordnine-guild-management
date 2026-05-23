@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import Fuse from 'fuse.js';
-import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, TableOfContents, Trash2, Wallet, X } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import '../styles/Attendance.css';
@@ -144,6 +144,8 @@ const getCreateAttendanceMultiplier = (combatPower: number) => {
     ? getCombatPowerMultiplier(normalizedCombatPower)
     : 0;
 };
+const UNKNOWN_GUILD_LABEL = 'Unknown Guild';
+const normalizeGuildFilterValue = (guildName: string) => guildName.trim() || UNKNOWN_GUILD_LABEL;
 
 interface OcrSpaceParsedResult {
   ParsedText?: string;
@@ -1205,6 +1207,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [bossName, setBossName] = useState('Metus');
   const [searchQuery, setSearchQuery] = useState('');
   const [manageSearchQuery, setManageSearchQuery] = useState('');
+  const [selectedGuildFilter, setSelectedGuildFilter] = useState('');
+  const [manageSelectedGuildFilter, setManageSelectedGuildFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'unmarked'>('all');
   const [isCreateAttendanceOpen, setIsCreateAttendanceOpen] = useState(false);
   const [isResetAttendanceConfirmOpen, setIsResetAttendanceConfirmOpen] = useState(false);
@@ -1223,7 +1227,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [ocrSourceLabel, setOcrSourceLabel] = useState('');
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [selectedBossNames, setSelectedBossNames] = useState<string[]>([]);
+  const [bossSearchQuery, setBossSearchQuery] = useState('');
   const [isBossDropdownOpen, setIsBossDropdownOpen] = useState(false);
+  const [copiedWalletSummaryId, setCopiedWalletSummaryId] = useState<string | null>(null);
   const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
   const [editingMetricValue, setEditingMetricValue] = useState('');
   const [isSavingMetric, setIsSavingMetric] = useState(false);
@@ -1299,6 +1305,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       .sort((first, second) => first.localeCompare(second));
   }, [bosses, attendanceType]);
 
+  const filteredBossNameOptions = useMemo(() => {
+    if (forceDashBossName) {
+      return ['-'];
+    }
+
+    const normalizedBossSearch = bossSearchQuery.trim().toLowerCase();
+    if (!normalizedBossSearch) {
+      return bossNameOptions;
+    }
+
+    return bossNameOptions.filter((nameOption) => nameOption.toLowerCase().includes(normalizedBossSearch));
+  }, [bossNameOptions, bossSearchQuery, forceDashBossName]);
+
   useEffect(() => {
     if (forceDashBossName) {
       if (bossName !== '-') {
@@ -1369,10 +1388,25 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return () => document.removeEventListener('click', handleOutsideClick);
   }, [isCreateAttendanceOpen, isBossDropdownOpen]);
 
+  useEffect(() => {
+    if (!isBossDropdownOpen && bossSearchQuery) {
+      setBossSearchQuery('');
+    }
+  }, [isBossDropdownOpen, bossSearchQuery]);
+
+  useEffect(() => {
+    setBossSearchQuery('');
+  }, [attendanceType]);
+
   const recordsByMemberId = useMemo(() => {
     const entries = records.map((record) => [record.memberId, record.status] as const);
     return new Map<string, AttendanceStatus>(entries);
   }, [records]);
+
+  const guildFilterOptions = useMemo(
+    () => Array.from(new Set(members.map((member) => normalizeGuildFilterValue(member.guildName)))).sort((first, second) => first.localeCompare(second)),
+    [members]
+  );
 
   const membersWithAttendance = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -1651,6 +1685,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const closeCreateAttendanceModal = () => {
     setIsCreateAttendanceOpen(false);
     setIsBossDropdownOpen(false);
+    setBossSearchQuery('');
     setCreateAttendanceError(null);
     setCreateAttendanceTab('ocr');
     setOcrRows([]);
@@ -2439,6 +2474,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setSearchQuery('');
     setStatusFilter('all');
     setDraftAttendanceByMemberId({});
+    setBossSearchQuery('');
     setCreateAttendanceTab('ocr');
     setOcrRows([]);
     setOcrError(null);
@@ -2620,6 +2656,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const monthAbbreviations = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
   const currentDateLabel = `${monthAbbreviations[Math.max(0, Math.min(11, Number(month) - 1))]} ${Number(day)}`;
   const summaryRowsComputed = useMemo(() => {
+    const memberGuildByName = new Map(
+      members.map((member) => [member.name.trim().toLowerCase(), normalizeGuildFilterValue(member.guildName)] as const)
+    );
+    const memberWalletAddressByName = new Map(
+      members.map((member) => [member.name.trim().toLowerCase(), member.walletAddress.trim()] as const)
+    );
     const memberMultiplierByName = new Map(
       members.map((member) => {
         const normalizedName = member.name.trim().toLowerCase();
@@ -2643,12 +2685,16 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const normalizedRowName = row.name.trim().toLowerCase();
       const computedMultiplier = memberMultiplierByName.get(normalizedRowName) ?? 1.0;
       const memberCombatPower = memberCombatPowerByName.get(normalizedRowName) ?? null;
+      const guildName = memberGuildByName.get(normalizedRowName) ?? UNKNOWN_GUILD_LABEL;
+      const walletAddress = memberWalletAddressByName.get(normalizedRowName) ?? '';
 
       return {
         ...row,
         computedTotalAttendance,
         computedMultiplier,
         memberCombatPower,
+        guildName,
+        walletAddress,
       };
     });
 
@@ -2677,24 +2723,33 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       });
   }, [summaryRows, attendancePercentage, members]);
 
-  const totalAttendanceAsOfCurrentDate = useMemo(
-    () => summaryRowsComputed.reduce((sum, row) => sum + row.computedTotalAttendance, 0),
-    [summaryRowsComputed]
-  );
-
   const guestSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
-    if (!normalizedSearch) return summaryRowsComputed;
+    return summaryRowsComputed.filter((row) => {
+      const matchesSearch = !normalizedSearch || row.name.toLowerCase().includes(normalizedSearch);
+      const matchesGuild = !selectedGuildFilter || row.guildName === selectedGuildFilter;
 
-    return summaryRowsComputed.filter((row) => row.name.toLowerCase().includes(normalizedSearch));
-  }, [summaryRowsComputed, searchQuery]);
+      return matchesSearch && matchesGuild;
+    });
+  }, [summaryRowsComputed, searchQuery, selectedGuildFilter]);
 
   const manageSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = manageSearchQuery.trim().toLowerCase();
-    if (!normalizedSearch) return summaryRowsComputed;
+    return summaryRowsComputed.filter((row) => {
+      const matchesSearch = !normalizedSearch || row.name.toLowerCase().includes(normalizedSearch);
+      const matchesGuild = !manageSelectedGuildFilter || row.guildName === manageSelectedGuildFilter;
 
-    return summaryRowsComputed.filter((row) => row.name.toLowerCase().includes(normalizedSearch));
-  }, [summaryRowsComputed, manageSearchQuery]);
+      return matchesSearch && matchesGuild;
+    });
+  }, [summaryRowsComputed, manageSearchQuery, manageSelectedGuildFilter]);
+  const guestFilteredTotalAttendance = useMemo(
+    () => guestSummaryRowsComputed.reduce((sum, row) => sum + row.computedTotalAttendance, 0),
+    [guestSummaryRowsComputed]
+  );
+  const manageFilteredTotalAttendance = useMemo(
+    () => manageSummaryRowsComputed.reduce((sum, row) => sum + row.computedTotalAttendance, 0),
+    [manageSummaryRowsComputed]
+  );
   const isResetAttendanceDisabled = isClearingAll || loading || manageSummaryRowsComputed.length === 0;
   const hasDraftAttendanceSelections = useMemo(
     () => Object.values(draftAttendanceByMemberId).some((status) => status !== 'unmarked'),
@@ -2799,6 +2854,20 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setMemberDetailsError(null);
     setIsLoadingMemberDetails(false);
     setDeletingAttendanceId(null);
+  };
+
+  const handleSummaryWalletCopy = async (summaryId: string, walletAddress: string) => {
+    if (!walletAddress.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopiedWalletSummaryId(summaryId);
+      window.setTimeout(() => {
+        setCopiedWalletSummaryId((currentId) => (currentId === summaryId ? null : currentId));
+      }, 1200);
+    } catch (clipboardError) {
+      console.error('Failed to copy wallet address:', clipboardError);
+    }
   };
 
   const formatAttendanceDateOnly = (attendanceDate: string) => {
@@ -2957,25 +3026,41 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           </div>
 
           <div className="attendance-guest-search-row">
-            <div className="attendance-guest-search-box">
-              <input
-                type="text"
-                className="attendance-guest-search-input"
-                placeholder="Search member name"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                aria-label="Search member name"
-              />
-              {searchQuery.trim().length > 0 && (
-                <button
-                  type="button"
-                  className="attendance-guest-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={14} strokeWidth={2} />
-                </button>
-              )}
+            <div className="attendance-summary-filters">
+              <div className="attendance-guest-search-box attendance-manage-search-box">
+                <span className="attendance-guest-search-icon" aria-hidden="true">
+                  <Search size={14} strokeWidth={1.9} />
+                </span>
+                <input
+                  type="text"
+                  className="attendance-guest-search-input attendance-manage-search-input"
+                  placeholder="Search member name"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  aria-label="Search member name"
+                />
+                {searchQuery.trim().length > 0 && (
+                  <button
+                    type="button"
+                    className="attendance-guest-search-clear"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+              <select
+                className="attendance-guild-filter-select"
+                value={selectedGuildFilter}
+                onChange={(event) => setSelectedGuildFilter(event.target.value)}
+                aria-label="Filter by guild"
+              >
+                <option value="">All Guilds</option>
+                {guildFilterOptions.map((guildOption) => (
+                  <option key={guildOption} value={guildOption}>{guildOption}</option>
+                ))}
+              </select>
             </div>
           </div>
         </>
@@ -3034,28 +3119,41 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           </div>
 
           <div className="attendance-toolbar attendance-toolbar-below-metrics">
-            <div className="attendance-guest-search-box attendance-manage-search-box">
-              <span className="attendance-guest-search-icon" aria-hidden="true">
-                <Search size={14} strokeWidth={1.9} />
-              </span>
-              <input
-                type="text"
-                className="attendance-guest-search-input attendance-manage-search-input"
-                placeholder="Search member name"
-                value={manageSearchQuery}
-                onChange={(event) => setManageSearchQuery(event.target.value)}
-                aria-label="Search member name"
-              />
-              {manageSearchQuery.trim().length > 0 && (
-                <button
-                  type="button"
-                  className="attendance-guest-search-clear"
-                  onClick={() => setManageSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={14} strokeWidth={2} />
-                </button>
-              )}
+            <div className="attendance-summary-filters">
+              <div className="attendance-guest-search-box attendance-manage-search-box">
+                <span className="attendance-guest-search-icon" aria-hidden="true">
+                  <Search size={14} strokeWidth={1.9} />
+                </span>
+                <input
+                  type="text"
+                  className="attendance-guest-search-input attendance-manage-search-input"
+                  placeholder="Search member name"
+                  value={manageSearchQuery}
+                  onChange={(event) => setManageSearchQuery(event.target.value)}
+                  aria-label="Search member name"
+                />
+                {manageSearchQuery.trim().length > 0 && (
+                  <button
+                    type="button"
+                    className="attendance-guest-search-clear"
+                    onClick={() => setManageSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+              <select
+                className="attendance-guild-filter-select"
+                value={manageSelectedGuildFilter}
+                onChange={(event) => setManageSelectedGuildFilter(event.target.value)}
+                aria-label="Filter by guild"
+              >
+                <option value="">All Guilds</option>
+                {guildFilterOptions.map((guildOption) => (
+                  <option key={guildOption} value={guildOption}>{guildOption}</option>
+                ))}
+              </select>
             </div>
             <button
               type="button"
@@ -3089,7 +3187,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           <table className="attendance-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th>No.</th>
+                <th className="summary-name-col">Name</th>
                 <th>Kransia</th>
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
@@ -3098,12 +3197,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>%</th>
                 <th>USDT Share</th>
                 <th>Multiplier</th>
-                <th className="summary-action-col">View</th>
+                <th className="summary-action-col">Action</th>
               </tr>
             </thead>
             <tbody>
-              {manageSummaryRowsComputed.map((row) => (
+              {manageSummaryRowsComputed.map((row, index) => (
                 <tr key={row.id}>
+                  <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
                     <div className="attendance-summary-member-name-cell">
                       <div className="attendance-summary-member-name-primary">{row.name}</div>
@@ -3128,9 +3228,24 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         className="summary-view-btn"
                         type="button"
                         aria-label={`View attendance details for ${row.name}`}
+                        title="View details"
                         onClick={() => viewMemberAttendanceDetails(row.name)}
                       >
-                        View Details
+                        <TableOfContents size={15} strokeWidth={2} />
+                      </button>
+                      <button
+                        className="summary-wallet-btn"
+                        type="button"
+                        aria-label={row.walletAddress ? `Copy wallet address for ${row.name}` : `No wallet address for ${row.name}`}
+                        title={row.walletAddress || 'No wallet address'}
+                        onClick={() => handleSummaryWalletCopy(row.id, row.walletAddress)}
+                        disabled={!row.walletAddress}
+                      >
+                        {copiedWalletSummaryId === row.id ? (
+                          <span className="summary-wallet-btn-label">Copied</span>
+                        ) : (
+                          <Wallet size={15} strokeWidth={2} />
+                        )}
                       </button>
                     </div>
                   </td>
@@ -3138,17 +3253,17 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && manageSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="attendance-empty-row">
+                  <td colSpan={11} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
               )}
             </tbody>
-            {!loading && summaryRowsComputed.length > 0 && (
+            {!loading && manageSummaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
-                  <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
+                  <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
+                  <td className="summary-footer-value">{manageFilteredTotalAttendance.toLocaleString()}</td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -3166,7 +3281,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           <table className="attendance-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th>No.</th>
+                <th className="summary-name-col">Name</th>
                 <th>Kransia</th>
                 <th>Field Boss</th>
                 <th>Guild Boss</th>
@@ -3179,8 +3295,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               </tr>
             </thead>
             <tbody>
-              {guestSummaryRowsComputed.map((row) => (
+              {guestSummaryRowsComputed.map((row, index) => (
                 <tr key={row.id}>
+                  <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
                     <div className="attendance-summary-member-name-cell">
                       <div className="attendance-summary-member-name-primary">{row.name}</div>
@@ -3205,9 +3322,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         className="summary-view-btn"
                         type="button"
                         aria-label={`View attendance details for ${row.name}`}
+                        title="View details"
                         onClick={() => viewMemberAttendanceDetails(row.name)}
                       >
-                        View Details
+                        <TableOfContents size={15} strokeWidth={2} />
                       </button>
                     </div>
                   </td>
@@ -3215,17 +3333,17 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && guestSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="attendance-empty-row">
+                  <td colSpan={11} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
               )}
             </tbody>
-            {!loading && summaryRowsComputed.length > 0 && (
+            {!loading && guestSummaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={5} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
-                  <td className="summary-footer-value">{totalAttendanceAsOfCurrentDate.toLocaleString()}</td>
+                  <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
+                  <td className="summary-footer-value">{guestFilteredTotalAttendance.toLocaleString()}</td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -3378,6 +3496,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         >
                           Clear
                         </button>
+                        <input
+                          type="text"
+                          className="boss-multi-dropdown-search"
+                          placeholder="Search boss"
+                          value={bossSearchQuery}
+                          onChange={(event) => setBossSearchQuery(event.target.value)}
+                          aria-label="Search boss"
+                        />
                         <button
                           type="button"
                           className="boss-multi-dropdown-close"
@@ -3391,7 +3517,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                     )}
 
                     <div className="boss-multi-dropdown-options">
-                      {(forceDashBossName ? ['-'] : bossNameOptions).map((nameOption) => {
+                      {filteredBossNameOptions.map((nameOption) => {
                         const isChecked = selectedBossNames.includes(nameOption);
                         return (
                           <button
@@ -3410,6 +3536,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                           </button>
                         );
                       })}
+                      {!forceDashBossName && filteredBossNameOptions.length === 0 && (
+                        <div className="boss-multi-dropdown-empty">No bosses found.</div>
+                      )}
                     </div>
                   </div>
                 )}
