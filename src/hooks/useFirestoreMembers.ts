@@ -13,6 +13,8 @@ import {
 import { db } from '../config/firebase';
 import { DEFAULT_MEMBER_CLASS, isMemberClass, type MemberClass } from '../utils/memberClass';
 
+const normalizeMemberName = (name: string) => name.trim().toLocaleLowerCase();
+
 export interface MemberRanking {
   id?: string;
   rank: number;
@@ -113,13 +115,30 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
 
   const addMember = async (member: Omit<MemberRanking, 'id' | 'rank'>) => {
     try {
+      const trimmedName = member.name.trim();
+      const trimmedGuildName = member.guildName.trim();
+
+      if (!trimmedName) {
+        throw new Error('Member name is required.');
+      }
+
+      if (!trimmedGuildName) {
+        throw new Error('Please select a guild.');
+      }
+
+      const normalizedName = normalizeMemberName(trimmedName);
+      const duplicateMember = members.some((existingMember) => normalizeMemberName(existingMember.name) === normalizedName);
+      if (duplicateMember) {
+        throw new Error('A member with that name is already registered.');
+      }
+
       const memberPayload: Omit<MemberRanking, 'id' | 'rank'> = {
-        name: member.name,
+        name: trimmedName,
         walletAddress: member.walletAddress ?? '',
         playerClass: isMemberClass(member.playerClass) ? member.playerClass : DEFAULT_MEMBER_CLASS,
         level: member.level,
         combatPower: member.combatPower,
-        guildName: member.guildName ?? '',
+        guildName: trimmedGuildName,
         status: member.status,
         memberType: member.memberType,
       };

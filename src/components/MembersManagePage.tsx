@@ -11,6 +11,8 @@ interface MembersManagePageProps {
   userType: 'guest' | 'admin';
 }
 
+const normalizeMemberName = (name: string) => name.trim().toLocaleLowerCase();
+
 const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const { members, loading, error, addMember, updateMember, deleteMember } = useFirestoreMembers();
   const { guildNames, factionLeader, loading: allianceLoading, error: allianceError } = useFirestoreAllianceInfo();
@@ -18,6 +20,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [addFormError, setAddFormError] = useState('');
   const [copiedWalletMemberId, setCopiedWalletMemberId] = useState<string | null>(null);
   const [sortBy] = useState<'combatPower'>('combatPower');
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,7 +52,11 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const hasActiveFilters = selectedGuildFilter !== 'all' || selectedClassFilter !== 'all';
 
   const filteredMembers = sortedMembers.filter((member) => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const walletSearch = searchQuery.trim();
+    const matchesSearch = !walletSearch
+      || member.name.toLowerCase().includes(normalizedSearch)
+      || member.walletAddress.includes(walletSearch);
     const matchesGuild = selectedGuildFilter === 'all' || member.guildName === selectedGuildFilter;
     const matchesClass = selectedClassFilter === 'all' || member.playerClass === selectedClassFilter;
 
@@ -93,7 +100,28 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       status: 'active',
       memberType: 'normal',
     });
+    setAddFormError('');
     setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setAddFormError('');
+    setShowAddModal(false);
+  };
+
+  const isDuplicateNameError = addFormError === 'A member with that name is already registered.';
+  const generalAddFormError = isDuplicateNameError ? '' : addFormError;
+
+  const validateNewMemberForm = (member: MemberRanking): string => {
+    const normalizedName = normalizeMemberName(member.name);
+
+    if (!normalizedName) return 'Member name is required.';
+    if (!member.guildName.trim()) return 'Please select a guild.';
+
+    const duplicateMember = members.some((existingMember) => normalizeMemberName(existingMember.name) === normalizedName);
+    if (duplicateMember) return 'A member with that name is already registered.';
+
+    return '';
   };
 
   const handleSaveMember = async (updatedMember: MemberRanking) => {
@@ -111,7 +139,14 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   };
 
   const handleAddMember = async () => {
+    const validationError = validateNewMemberForm(newMember);
+    if (validationError) {
+      setAddFormError(validationError);
+      return;
+    }
+
     try {
+      setAddFormError('');
       setSaving(true);
       await addMember({
         name: newMember.name,
@@ -123,7 +158,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
         status: newMember.status,
         memberType: newMember.memberType,
       });
-      setShowAddModal(false);
+      closeAddModal();
     } catch (err) {
       console.error('Failed to add member:', err);
     } finally {
@@ -225,10 +260,10 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
           <input
             type="text"
             className="attendance-guest-search-input attendance-manage-search-input"
-            placeholder="Search member..."
+            placeholder="Search member or wallet address..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            aria-label="Search member"
+            aria-label="Search member or wallet address"
           />
           {searchQuery.trim().length > 0 && (
             <button
@@ -399,22 +434,27 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={closeAddModal}>
           <div className="modal-content add-member-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add Member</h3>
-              <button className="modal-close" onClick={() => setShowAddModal(false)} aria-label="Close">
+              <button className="modal-close" onClick={closeAddModal} aria-label="Close">
                 <X size={18} strokeWidth={1.8} />
               </button>
             </div>
             <div className="modal-body add-member-modal-body">
+              {generalAddFormError && <div className="error-state"><p>{generalAddFormError}</p></div>}
               <div className="form-group">
                 <label>Name</label>
                 <input
                   type="text"
                   value={newMember.name}
-                  onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                  onChange={(e) => {
+                    setAddFormError('');
+                    setNewMember({ ...newMember, name: e.target.value });
+                  }}
                 />
+                {isDuplicateNameError && <p className="member-name-error">{addFormError}</p>}
               </div>
               <div className="form-group">
                 <label>Wallet Address</label>
@@ -476,7 +516,10 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
                 <label>Guild</label>
                 <select
                   value={newMember.guildName}
-                  onChange={(e) => setNewMember({ ...newMember, guildName: e.target.value })}
+                  onChange={(e) => {
+                    setAddFormError('');
+                    setNewMember({ ...newMember, guildName: e.target.value });
+                  }}
                   disabled={allianceLoading}
                 >
                   <option value="">
@@ -495,8 +538,8 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)} disabled={saving}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAddMember} disabled={saving || !newMember.name}>
+              <button className="btn btn-secondary" onClick={closeAddModal} disabled={saving}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAddMember} disabled={saving || !newMember.name.trim() || !newMember.guildName.trim()}>
                 {saving ? 'Saving...' : 'Add Member'}
               </button>
             </div>
