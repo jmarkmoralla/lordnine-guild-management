@@ -28,7 +28,11 @@ const RankingsPage: React.FC = () => {
   const hasActiveFilters = selectedGuildFilter !== 'all' || selectedClassFilter !== 'all';
 
   const filteredMembers = rankedMembers.filter((member) => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const walletSearch = searchQuery.trim();
+    const matchesSearch = !walletSearch
+      || member.name.toLowerCase().includes(normalizedSearch)
+      || member.walletAddress.includes(walletSearch);
     const matchesGuild = selectedGuildFilter === 'all' || member.guildName === selectedGuildFilter;
     const matchesClass = selectedClassFilter === 'all' || member.playerClass === selectedClassFilter;
 
@@ -108,10 +112,10 @@ const RankingsPage: React.FC = () => {
             <input
               type="text"
               className="attendance-guest-search-input attendance-manage-search-input"
-              placeholder="Search member..."
+              placeholder="Search member or wallet address..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label="Search member"
+              aria-label="Search member or wallet"
             />
             {searchQuery.trim().length > 0 && (
               <button

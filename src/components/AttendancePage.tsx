@@ -3005,7 +3005,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           <div className="guild-metrics-grid">
             <div className="guild-metric-card" tabIndex={0}>
               <div className="guild-metric-header">
-                <p className="guild-metric-label">Total Guild Fund</p>
+                <p className="guild-metric-label">Total Fund</p>
               </div>
               <p className="guild-metric-value">${totalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
             </div>
@@ -3071,13 +3071,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           <div className="guild-metrics-grid">
             <div className="guild-metric-card" tabIndex={0}>
               <div className="guild-metric-header">
-                <p className="guild-metric-label">Total Guild Fund</p>
+                <p className="guild-metric-label">Total Fund</p>
                 {editingMetric !== 'totalFund' ? (
                   <button
                     type="button"
                     className="guild-metric-edit-btn"
                     onClick={() => startMetricEdit(totalFund)}
-                    aria-label="Edit Total Guild Fund"
+                    aria-label="Edit Total Fund"
                     disabled={isSavingMetric}
                   >
                     ✎
