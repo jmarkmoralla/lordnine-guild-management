@@ -22,6 +22,7 @@ export interface AttendanceRecord {
   attendanceType: string;
   bossName: string;
   attendanceDate: string;
+  attendanceSessionId: string;
   status: AttendanceStatus;
   multiplier: number;
 }
@@ -35,7 +36,8 @@ interface UseFirestoreAttendanceReturn {
     memberName: string,
     status: AttendanceStatus,
     multiplier?: number,
-    bossNameOverride?: string
+    bossNameOverride?: string,
+    attendanceSessionId?: string
   ) => Promise<void>;
   clearAttendance: (memberId: string) => Promise<void>;
 }
@@ -91,15 +93,17 @@ export const useFirestoreAttendance = (
         const items: AttendanceRecord[] = snapshot.docs
           .map((attendanceDoc) => {
             const data = attendanceDoc.data() as {
+              memberId?: string;
               name?: string;
               attendanceType?: string;
               bossName?: string;
               attendanceDate?: string;
+              attendanceSessionId?: string;
               status?: string;
               multiplier?: number;
             };
 
-            const memberId = attendanceDoc.id.split('|')[1] || '';
+            const memberId = data.memberId || attendanceDoc.id.split('|')[1] || '';
 
             return {
               id: attendanceDoc.id,
@@ -108,6 +112,7 @@ export const useFirestoreAttendance = (
               attendanceType: data.attendanceType || '',
               bossName: data.bossName || '',
               attendanceDate: data.attendanceDate || '',
+              attendanceSessionId: data.attendanceSessionId || '',
               status: fromFirestoreStatus(data.status),
               multiplier: Number(data.multiplier ?? 1),
             };
@@ -133,7 +138,8 @@ export const useFirestoreAttendance = (
     memberName: string,
     status: AttendanceStatus,
     multiplier = 1,
-    bossNameOverride?: string
+    bossNameOverride?: string,
+    attendanceSessionId?: string
   ) => {
     const targetBossName = (bossNameOverride || bossName).trim();
     const attendanceDateTime = buildAttendanceDateTime(date);
@@ -147,6 +153,7 @@ export const useFirestoreAttendance = (
         attendanceType,
         bossName: targetBossName,
         attendanceDate: attendanceDateTime,
+        attendanceSessionId: attendanceSessionId?.trim() || '',
         status: toFirestoreStatus(status),
         multiplier: Number.isFinite(normalizedMultiplier) ? normalizedMultiplier : 1,
       },

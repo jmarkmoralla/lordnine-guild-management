@@ -7,6 +7,7 @@ import '../styles/Attendance.css';
 import { auth, db } from '../config/firebase';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
 import { type AttendanceStatus, useFirestoreAttendance } from '../hooks/useFirestoreAttendance';
+import { useFirestoreAttendanceParticipation } from '../hooks/useFirestoreAttendanceParticipation';
 import { useFirestoreAttendanceSummary } from '../hooks/useFirestoreAttendanceSummary';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
@@ -1207,8 +1208,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [bossName, setBossName] = useState('Metus');
   const [searchQuery, setSearchQuery] = useState('');
   const [manageSearchQuery, setManageSearchQuery] = useState('');
+  const [createAttendanceSearchQuery, setCreateAttendanceSearchQuery] = useState('');
   const [selectedGuildFilter, setSelectedGuildFilter] = useState('');
   const [manageSelectedGuildFilter, setManageSelectedGuildFilter] = useState('');
+  const [createSelectedGuildFilter, setCreateSelectedGuildFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'unmarked'>('all');
   const [isCreateAttendanceOpen, setIsCreateAttendanceOpen] = useState(false);
   const [isResetAttendanceConfirmOpen, setIsResetAttendanceConfirmOpen] = useState(false);
@@ -1263,6 +1266,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     syncPresentMembersToSummary,
     refreshSummaryForMember,
   } = useFirestoreAttendanceSummary();
+  const {
+    participationByMemberId,
+    participationByMemberName,
+    loading: participationLoading,
+    error: participationError,
+  } = useFirestoreAttendanceParticipation();
   const {
     records,
     loading: attendanceLoading,
@@ -1409,7 +1418,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   );
 
   const membersWithAttendance = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const normalizedSearch = (canManage && isCreateAttendanceOpen ? createAttendanceSearchQuery : searchQuery).trim().toLowerCase();
+    const activeGuildFilter = canManage && isCreateAttendanceOpen ? createSelectedGuildFilter : '';
 
     return members
       .map((member) => ({
@@ -1430,12 +1440,16 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         const matchesSearch = member.name.toLowerCase().includes(normalizedSearch);
         if (!matchesSearch) return false;
 
+        const memberGuildName = normalizeGuildFilterValue(member.guildName);
+        const matchesGuild = !activeGuildFilter || memberGuildName === activeGuildFilter;
+        if (!matchesGuild) return false;
+
           if (activeStatusFilter === 'all') return true;
           if (activeStatusFilter === 'unmarked') return !member.attendanceStatus;
           return member.attendanceStatus === activeStatusFilter;
       })
       .sort((first, second) => first.rank - second.rank);
-        }, [members, recordsByMemberId, searchQuery, activeStatusFilter, canManage, isCreateAttendanceOpen, draftAttendanceByMemberId]);
+        }, [members, recordsByMemberId, searchQuery, createAttendanceSearchQuery, createSelectedGuildFilter, activeStatusFilter, canManage, isCreateAttendanceOpen, draftAttendanceByMemberId]);
 
   const comparableMembers = useMemo(
     () => members
@@ -1686,6 +1700,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsCreateAttendanceOpen(false);
     setIsBossDropdownOpen(false);
     setBossSearchQuery('');
+    setCreateAttendanceSearchQuery('');
+    setCreateSelectedGuildFilter('');
     setCreateAttendanceError(null);
     setCreateAttendanceTab('ocr');
     setOcrRows([]);
@@ -2603,6 +2619,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       setIsSavingAttendanceData(true);
       setIsSyncingAttendanceSummary(true);
 
+      const attendanceSessionIdsByBossName = Object.fromEntries(
+        selectedBossesToPersist.map((selectedBossName) => [
+          selectedBossName,
+          [selectedDate, attendanceType, selectedBossName, Date.now().toString(36), Math.random().toString(36).slice(2, 8)].join('|'),
+        ])
+      );
+
       await Promise.all(
         selectedBossesToPersist.flatMap((selectedBossName) => (
           membersToPersist.map(async (member) => {
@@ -2610,7 +2633,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
             if (draftStatus === 'present') {
               const multiplier = getCreateAttendanceMultiplier(Number(member.combatPower || 0));
-              await upsertAttendance(member.id, member.name, 'present', multiplier, selectedBossName);
+              await upsertAttendance(
+                member.id,
+                member.name,
+                'present',
+                multiplier,
+                selectedBossName,
+                attendanceSessionIdsByBossName[selectedBossName]
+              );
             }
           })
         ))
@@ -2643,8 +2673,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return <span className="badge badge-absent">Absent</span>;
   };
 
-  const loading = membersLoading || attendanceLoading || summaryLoading || bossesLoading || guildInfoLoading;
-  const pageError = membersError || attendanceError || summaryError || bossesError || guildInfoError;
+  const loading = membersLoading || attendanceLoading || summaryLoading || bossesLoading || guildInfoLoading || participationLoading;
+  const pageError = membersError || attendanceError || summaryError || bossesError || guildInfoError || participationError;
   const isSaveAttendanceDisabled =
     isClearingAll || loading || isSyncingAttendanceSummary || isSavingAttendanceData;
   const displayedAttendancePoints = isCreateAttendanceOpen
@@ -2656,6 +2686,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const monthAbbreviations = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
   const currentDateLabel = `${monthAbbreviations[Math.max(0, Math.min(11, Number(month) - 1))]} ${Number(day)}`;
   const summaryRowsComputed = useMemo(() => {
+    const emptyParticipationStats = {
+      attendedEvents: 0,
+      totalEligibleEvents: 0,
+      participationPercent: 0,
+    };
     const memberGuildByName = new Map(
       members.map((member) => [member.name.trim().toLowerCase(), normalizeGuildFilterValue(member.guildName)] as const)
     );
@@ -2675,6 +2710,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     const memberCombatPowerByName = new Map(
       members.map((member) => [member.name.trim().toLowerCase(), Number(member.combatPower || 0)] as const)
     );
+    const memberIdByName = new Map(
+      members
+        .filter((member): member is typeof member & { id: string } => Boolean(member.id))
+        .map((member) => [member.name.trim().toLowerCase(), member.id] as const)
+    );
 
     const rowsWithMemberTotals = summaryRows.map((row) => {
       const computedTotalAttendance =
@@ -2687,6 +2727,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const memberCombatPower = memberCombatPowerByName.get(normalizedRowName) ?? null;
       const guildName = memberGuildByName.get(normalizedRowName) ?? UNKNOWN_GUILD_LABEL;
       const walletAddress = memberWalletAddressByName.get(normalizedRowName) ?? '';
+      const memberId = memberIdByName.get(normalizedRowName) ?? '';
+      const participationStats = (memberId && participationByMemberId[memberId])
+        || participationByMemberName[normalizedRowName]
+        || emptyParticipationStats;
 
       return {
         ...row,
@@ -2695,6 +2739,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         memberCombatPower,
         guildName,
         walletAddress,
+        participationEventCount: participationStats.attendedEvents,
+        participationTotalEvents: participationStats.totalEligibleEvents,
+        participationPercent: participationStats.participationPercent,
       };
     });
 
@@ -2721,7 +2768,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         if (attendanceDifference !== 0) return attendanceDifference;
         return first.name.localeCompare(second.name);
       });
-  }, [summaryRows, attendancePercentage, members]);
+  }, [summaryRows, attendancePercentage, members, participationByMemberId, participationByMemberName]);
 
   const guestSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -2754,6 +2801,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const hasDraftAttendanceSelections = useMemo(
     () => Object.values(draftAttendanceByMemberId).some((status) => status !== 'unmarked'),
     [draftAttendanceByMemberId]
+  );
+  const selectedMemberCount = useMemo(
+    () => membersWithAttendance.filter((member) => member.attendanceStatus === 'present').length,
+    [membersWithAttendance]
   );
   const isModalClearAllDisabled = isClearingAll || loading || (!hasDraftAttendanceSelections && ocrRows.length === 0);
 
@@ -2921,7 +2972,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             <th className="col-multiplier">Multiplier</th>
             <th>Date</th>
             <th className="col-status">Status</th>
-            {canManage && <th className="col-action">Action</th>}
+            {canManage && <th className="col-action">{isCreateAttendanceOpen ? `Action (${selectedMemberCount})` : 'Action'}</th>}
           </tr>
         </thead>
         <tbody>
@@ -3194,6 +3245,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
                 <th>Total Pts</th>
+                <th>Participation</th>
                 <th>%</th>
                 <th>USDT Share</th>
                 <th>Multiplier</th>
@@ -3202,7 +3254,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             </thead>
             <tbody>
               {manageSummaryRowsComputed.map((row, index) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={row.participationPercent < 50 ? 'attendance-summary-row-low-participation' : undefined}
+                >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
                     <div className="attendance-summary-member-name-cell">
@@ -3219,6 +3274,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <td className="member-date">{row.guildBoss}</td>
                   <td className="member-date">{row.guildvsguild}</td>
                   <td className="member-date">{row.computedTotalAttendance}</td>
+                  <td className="member-date">{row.participationPercent.toFixed(2)}%</td>
                   <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
                   <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                   <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
@@ -3253,7 +3309,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && manageSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="attendance-empty-row">
+                  <td colSpan={12} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -3264,6 +3320,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <tr>
                   <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{manageFilteredTotalAttendance.toLocaleString()}</td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -3288,6 +3345,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <th>Guild Boss</th>
                 <th>Guild vs Guild</th>
                 <th>Total Pts</th>
+                <th>Participation</th>
                 <th>%</th>
                 <th>USDT Share</th>
                 <th>Multiplier</th>
@@ -3296,7 +3354,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             </thead>
             <tbody>
               {guestSummaryRowsComputed.map((row, index) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={row.participationPercent < 50 ? 'attendance-summary-row-low-participation' : undefined}
+                >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
                     <div className="attendance-summary-member-name-cell">
@@ -3313,6 +3374,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <td className="member-date">{row.guildBoss}</td>
                   <td className="member-date">{row.guildvsguild}</td>
                   <td className="member-date">{row.computedTotalAttendance}</td>
+                  <td className="member-date">{row.participationPercent.toFixed(2)}%</td>
                   <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
                   <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                   <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
@@ -3333,7 +3395,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && guestSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="attendance-empty-row">
+                  <td colSpan={12} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -3344,6 +3406,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <tr>
                   <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
                   <td className="summary-footer-value">{guestFilteredTotalAttendance.toLocaleString()}</td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
@@ -3437,7 +3500,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               </button>
             </div>
 
-            <div className="attendance-filters">
+            <div className="attendance-filters attendance-create-filters">
               <input
                 type="date"
                 className="filter-input"
@@ -3547,9 +3610,20 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 type="text"
                 className="filter-input create-attendance-search-input"
                 placeholder="Search member name"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                value={createAttendanceSearchQuery}
+                onChange={(event) => setCreateAttendanceSearchQuery(event.target.value)}
               />
+              <select
+                className="filter-select create-attendance-guild-filter"
+                value={createSelectedGuildFilter}
+                onChange={(event) => setCreateSelectedGuildFilter(event.target.value)}
+                aria-label="Filter modal members by guild"
+              >
+                <option value="">All Guilds</option>
+                {guildFilterOptions.map((guildOption) => (
+                  <option key={guildOption} value={guildOption}>{guildOption}</option>
+                ))}
+              </select>
             </div>
             <div className="attendance-create-tabs" role="tablist" aria-label="Attendance mode">
               <button
