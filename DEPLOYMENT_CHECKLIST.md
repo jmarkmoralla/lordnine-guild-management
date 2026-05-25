@@ -42,29 +42,9 @@ npm run build
 
 ```bash
 node --check functions/index.js
-node --check functions/scripts/migrateAdminRoles.js
-node --check functions/scripts/rollbackAdminRoles.js
 ```
 
 3. Optionally run the Firebase emulator for functions before production deploy.
-
-## Role Migration
-
-1. Decide which existing admin UIDs should remain super admins.
-2. Preview the migration:
-
-```bash
-cd functions
-npm run migrate-admin-roles -- --super-admin-uids=UID_1,UID_2
-```
-
-3. Apply the migration once the preview looks correct:
-
-```bash
-npm run migrate-admin-roles -- --super-admin-uids=UID_1,UID_2 --apply
-```
-
-4. Save the generated backup file path so rollback remains available.
 
 ## Deploy
 
@@ -94,15 +74,5 @@ firebase deploy --only hosting
 3. Confirm a regular admin can still access the normal admin pages but cannot access Manage Admins.
 4. Confirm a non-admin still fails Firestore reads and writes.
 5. Confirm OCR still works for enabled admins.
-
-## Rollback
-
-If the role migration needs to be reverted:
-
-```bash
-cd functions
-npm run rollback-admin-roles -- --backup-file=admin-role-backups/admin-role-backup-YYYY-MM-DDTHH-MM-SS-sssZ.json
-npm run rollback-admin-roles -- --backup-file=admin-role-backups/admin-role-backup-YYYY-MM-DDTHH-MM-SS-sssZ.json --apply
-```
 
 If the production deploy itself needs to be rolled back, use your normal hosting and functions release process. This repository does not currently include automated release pinning or one-command deployment rollback.

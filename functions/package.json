@@ -8,9 +8,7 @@
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
-    "migrate-admin-roles": "node scripts/migrateAdminRoles.js",
-    "rollback-admin-roles": "node scripts/rollbackAdminRoles.js"
+    "logs": "firebase functions:log"
   },
   "dependencies": {
     "firebase-admin": "^13.6.0",

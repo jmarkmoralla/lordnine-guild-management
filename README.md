@@ -100,38 +100,6 @@ npm run build
 7. Ensure each admin user has a matching Firestore document in `admins/{uid}` with `enabled: true`, or login and OCR access will be denied.
 8. After hardening, non-admin users are denied Firestore reads and writes by server rules.
 
-## Super Admin Migration
-
-If you already have admin documents in Firestore, assign explicit roles before relying on the new super-admin UI.
-
-1. Install the functions dependencies if you have not done so yet:
-
-```bash
-cd functions
-npm install
-```
-
-2. Run a dry run to see which admin documents will change:
-
-```bash
-npm run migrate-admin-roles -- --super-admin-uids=UID_1,UID_2
-```
-
-3. Apply the changes once the preview looks correct. The script writes a backup JSON file before updating Firestore roles:
-
-```bash
-npm run migrate-admin-roles -- --super-admin-uids=UID_1,UID_2 --apply
-```
-
-The script updates existing `admins/{uid}` documents so listed UIDs become `super_admin` and all other enabled admins become `admin`. Disabled admins also receive an explicit `role` field so the frontend and Cloud Functions no longer rely on the legacy fallback behavior.
-
-If you need to revert the role migration, use the backup file created during the apply step:
-
-```bash
-npm run rollback-admin-roles -- --backup-file=admin-role-backups/admin-role-backup-YYYY-MM-DDTHH-MM-SS-sssZ.json
-npm run rollback-admin-roles -- --backup-file=admin-role-backups/admin-role-backup-YYYY-MM-DDTHH-MM-SS-sssZ.json --apply
-```
-
 If your frontend stays on Vercel, set `VITE_ADMIN_FUNCTIONS_BASE_URL` to the deployed Cloud Functions base URL when you want the admin panel to bypass Firebase Hosting rewrites explicitly.
 
 ## Technologies Used

@@ -12,6 +12,7 @@ import { useFirestoreAttendanceSummary } from '../hooks/useFirestoreAttendanceSu
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { getAttendancePoints, getAttendancePointsForBossSelection } from '../utils/attendancePoints.ts';
+import { buildAttendanceSessionId, buildAttendanceSessionIdFromAttendanceDate } from '../utils/attendanceSession.ts';
 import { getCombatPowerMultiplier, MINIMUM_ATTENDANCE_COMBAT_POWER } from '../utils/combatPowerMultiplier.ts';
 import { getPhilippinesNowParts } from '../utils/philippinesTime';
 
@@ -1267,8 +1268,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     refreshSummaryForMember,
   } = useFirestoreAttendanceSummary();
   const {
-    participationByMemberId,
-    participationByMemberName,
+    totalSessions,
     loading: participationLoading,
     error: participationError,
   } = useFirestoreAttendanceParticipation();
@@ -2622,9 +2622,28 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const attendanceSessionIdsByBossName = Object.fromEntries(
         selectedBossesToPersist.map((selectedBossName) => [
           selectedBossName,
-          [selectedDate, attendanceType, selectedBossName, Date.now().toString(36), Math.random().toString(36).slice(2, 8)].join('|'),
+          buildAttendanceSessionId(selectedDate, attendanceType, selectedBossName),
         ])
       );
+      const attendanceSessionsBatch = writeBatch(db);
+      const normalizedAttendanceType = attendanceType.trim().toLowerCase();
+      const isParticipationEligible = normalizedAttendanceType !== 'guild boss';
+
+      selectedBossesToPersist.forEach((selectedBossName) => {
+        const attendanceSessionId = attendanceSessionIdsByBossName[selectedBossName];
+
+        attendanceSessionsBatch.set(doc(db, 'attendanceSessions', attendanceSessionId), {
+          attendanceSessionId,
+          attendanceType,
+          bossName: selectedBossName,
+          eventDate: selectedDate,
+          createdAt: new Date().toISOString(),
+          status: 'active',
+          isParticipationEligible,
+        }, { merge: true });
+      });
+
+      await attendanceSessionsBatch.commit();
 
       await Promise.all(
         selectedBossesToPersist.flatMap((selectedBossName) => (
@@ -2650,7 +2669,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         await syncPresentMembersToSummary(
           attendanceType,
           presentMembersForSummary,
-          selectedAttendancePoints
+          selectedAttendancePoints,
+          isParticipationEligible ? selectedBossesToPersist.length : 0
         );
       }
 
@@ -2686,11 +2706,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const monthAbbreviations = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
   const currentDateLabel = `${monthAbbreviations[Math.max(0, Math.min(11, Number(month) - 1))]} ${Number(day)}`;
   const summaryRowsComputed = useMemo(() => {
-    const emptyParticipationStats = {
-      attendedEvents: 0,
-      totalEligibleEvents: 0,
-      participationPercent: 0,
-    };
     const memberGuildByName = new Map(
       members.map((member) => [member.name.trim().toLowerCase(), normalizeGuildFilterValue(member.guildName)] as const)
     );
@@ -2710,12 +2725,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     const memberCombatPowerByName = new Map(
       members.map((member) => [member.name.trim().toLowerCase(), Number(member.combatPower || 0)] as const)
     );
-    const memberIdByName = new Map(
-      members
-        .filter((member): member is typeof member & { id: string } => Boolean(member.id))
-        .map((member) => [member.name.trim().toLowerCase(), member.id] as const)
-    );
-
     const rowsWithMemberTotals = summaryRows.map((row) => {
       const computedTotalAttendance =
         Number(row.kransia || 0)
@@ -2727,10 +2736,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const memberCombatPower = memberCombatPowerByName.get(normalizedRowName) ?? null;
       const guildName = memberGuildByName.get(normalizedRowName) ?? UNKNOWN_GUILD_LABEL;
       const walletAddress = memberWalletAddressByName.get(normalizedRowName) ?? '';
-      const memberId = memberIdByName.get(normalizedRowName) ?? '';
-      const participationStats = (memberId && participationByMemberId[memberId])
-        || participationByMemberName[normalizedRowName]
-        || emptyParticipationStats;
+      const totalEventsAttended = row.totalEventsAttended ?? 0;
+      const participationPercent = totalSessions > 0
+        ? (totalEventsAttended / totalSessions) * 100
+        : 0;
 
       return {
         ...row,
@@ -2739,9 +2748,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         memberCombatPower,
         guildName,
         walletAddress,
-        participationEventCount: participationStats.attendedEvents,
-        participationTotalEvents: participationStats.totalEligibleEvents,
-        participationPercent: participationStats.participationPercent,
+        totalEventsAttended,
+        participationEventCount: totalEventsAttended,
+        participationTotalEvents: totalSessions,
+        participationPercent,
       };
     });
 
@@ -2768,7 +2778,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         if (attendanceDifference !== 0) return attendanceDifference;
         return first.name.localeCompare(second.name);
       });
-  }, [summaryRows, attendancePercentage, members, participationByMemberId, participationByMemberName]);
+  }, [summaryRows, attendancePercentage, members, totalSessions]);
 
   const guestSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -2949,6 +2959,24 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       setDeletingAttendanceId(attendance.id);
       await deleteDoc(doc(db, 'guildAttendance', attendance.id));
       setMemberAttendanceDetails((current) => current.filter((currentAttendance) => currentAttendance.id !== attendance.id));
+
+      // After deleting the attendance, check if any attendance rows remain for the same session
+      // If none, hard delete the attendanceSessions doc
+      // Rebuild the session ID from the attendance row
+      const sessionId = buildAttendanceSessionIdFromAttendanceDate(
+        attendance.attendanceDate,
+        attendance.attendanceType,
+        attendance.bossName
+      );
+      const attendanceQuery = query(
+        collection(db, 'guildAttendance'),
+        where('attendanceSessionId', '==', sessionId)
+      );
+      const snapshot = await getDocs(attendanceQuery);
+      if (snapshot.empty) {
+        await deleteDoc(doc(db, 'attendanceSessions', sessionId));
+      }
+
       if (viewingMemberName) {
         await refreshSummaryForMember(viewingMemberName);
       }
