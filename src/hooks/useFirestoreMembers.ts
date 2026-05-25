@@ -6,14 +6,17 @@ import {
   deleteDoc,
   doc,
   deleteField,
+  getDocs,
   onSnapshot,
   query,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { DEFAULT_MEMBER_CLASS, isMemberClass, type MemberClass } from '../utils/memberClass';
 
 const normalizeMemberName = (name: string) => name.trim().toLocaleLowerCase();
+const BATCH_LIMIT = 400;
 
 export interface MemberRanking {
   id?: string;
@@ -42,6 +45,16 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
   const [members, setMembers] = useState<MemberRanking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const commitBatchWrites = async (writes: Array<(batch: ReturnType<typeof writeBatch>) => void>) => {
+    if (writes.length === 0) return;
+
+    for (let start = 0; start < writes.length; start += BATCH_LIMIT) {
+      const batch = writeBatch(db);
+      writes.slice(start, start + BATCH_LIMIT).forEach((applyWrite) => applyWrite(batch));
+      await batch.commit();
+    }
+  };
 
   const removeLegacyRankField = async (memberDocIds: string[]) => {
     if (memberDocIds.length === 0) return;
@@ -153,6 +166,11 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
   const updateMember = async (id: string, updates: Partial<MemberRanking>) => {
     try {
       const memberRef = doc(db, 'guildMembers', id);
+      const existingMember = members.find((member) => member.id === id);
+      if (!existingMember) {
+        throw new Error('Member not found.');
+      }
+
       const { rank, walletAddress, playerClass, ...updatesWithoutRank } = updates;
       void rank;
 
@@ -168,7 +186,65 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
         updatePayload.playerClass = playerClass;
       }
 
+      if (typeof updatePayload.name === 'string') {
+        const trimmedName = updatePayload.name.trim();
+        if (!trimmedName) {
+          throw new Error('Member name is required.');
+        }
+
+        const duplicateMember = members.some((member) => member.id !== id && normalizeMemberName(member.name) === normalizeMemberName(trimmedName));
+        if (duplicateMember) {
+          throw new Error('A member with that name is already registered.');
+        }
+
+        updatePayload.name = trimmedName;
+      }
+
+      if (typeof updatePayload.guildName === 'string') {
+        const trimmedGuildName = updatePayload.guildName.trim();
+        if (!trimmedGuildName) {
+          throw new Error('Please select a guild.');
+        }
+
+        updatePayload.guildName = trimmedGuildName;
+      }
+
+      const previousName = existingMember.name;
+      const nextName = typeof updatePayload.name === 'string' ? updatePayload.name : previousName;
+      const didRenameMember = nextName !== previousName;
+
       await updateDoc(memberRef, updatePayload);
+
+      if (!didRenameMember) {
+        return;
+      }
+
+      const [attendanceSnapshot, summarySnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'guildAttendance'), where('memberId', '==', id))),
+        getDocs(collection(db, 'guildAttendanceSummary')),
+      ]);
+
+      const normalizedPreviousName = normalizeMemberName(previousName);
+      const cascadingWrites: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+      attendanceSnapshot.docs.forEach((attendanceDoc) => {
+        cascadingWrites.push((batch) => {
+          batch.update(attendanceDoc.ref, { name: nextName });
+        });
+      });
+
+      summarySnapshot.docs
+        .filter((summaryDoc) => {
+          const summaryData = summaryDoc.data() as Partial<MemberRanking> & { name?: string };
+          return normalizeMemberName(summaryData.name || '') === normalizedPreviousName;
+        })
+        .forEach((summaryDoc) => {
+          cascadingWrites.push((batch) => {
+            batch.set(summaryDoc.ref, { name: nextName }, { merge: true });
+          });
+        });
+
+      await commitBatchWrites(cascadingWrites);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update member');
       throw err;

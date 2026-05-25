@@ -1,16 +1,6 @@
 export const PHILIPPINES_TIME_ZONE = 'Asia/Manila';
-export const PHILIPPINES_OFFSET = '+08:00';
-export const PHILIPPINES_DISPLAY_DATETIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  timeZone: PHILIPPINES_TIME_ZONE,
-  month: 'short',
-  day: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-};
-
-export const PHILIPPINES_DISPLAY_DAYTIME_OPTIONS: Intl.DateTimeFormatOptions = {
+const PHILIPPINES_OFFSET = '+08:00';
+const PHILIPPINES_DISPLAY_DAYTIME_OPTIONS: Intl.DateTimeFormatOptions = {
   timeZone: PHILIPPINES_TIME_ZONE,
   weekday: 'long',
   hour: '2-digit',
@@ -50,37 +40,6 @@ export const getPhilippinesNowIsoString = () => {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${PHILIPPINES_OFFSET}`;
 };
 
-export const formatPhilippinesDisplayDateTime = (date: Date) => {
-  const formatter = new Intl.DateTimeFormat('en-PH', PHILIPPINES_DISPLAY_DATETIME_OPTIONS);
-
-  const parts = formatter.formatToParts(date);
-  const month = parts.find((part) => part.type === 'month')?.value ?? '';
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const year = parts.find((part) => part.type === 'year')?.value ?? '';
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '';
-
-  return `${month}. ${day}, ${year} - ${hour}:${minute}`;
-};
-
-export const formatPhilippinesMonthDayTime = (date: Date) => {
-  const parts = new Intl.DateTimeFormat('en-PH', {
-    timeZone: PHILIPPINES_TIME_ZONE,
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-
-  const month = parts.find((part) => part.type === 'month')?.value ?? '';
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '';
-
-  return `${month}/${day} - ${hour}:${minute}`;
-};
-
 export const formatPhilippinesMonthDayTime12 = (date: Date) => {
   const parts = new Intl.DateTimeFormat('en-PH', {
     timeZone: PHILIPPINES_TIME_ZONE,
@@ -99,8 +58,6 @@ export const formatPhilippinesMonthDayTime12 = (date: Date) => {
 
   return `${month}/${day} - ${hour}:${minute} ${dayPeriod}`.trim();
 };
-
-export const formatPhilippinesDateTime = formatPhilippinesDisplayDateTime;
 
 export const formatPhilippinesDayTime = (date: Date) => {
   const formatter = new Intl.DateTimeFormat('en-PH', PHILIPPINES_DISPLAY_DAYTIME_OPTIONS);

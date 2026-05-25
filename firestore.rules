@@ -66,6 +66,11 @@ service cloud.firestore {
       allow write: if isEnabledAdmin();
     }
 
+    match /attendanceSessions/{docId} {
+      allow read: if true;
+      allow write: if isEnabledAdmin();
+    }
+
     match /bossNotifier/{docId} {
       allow read: if true;
       allow write: if isEnabledAdmin();
