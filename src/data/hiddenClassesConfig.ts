@@ -159,10 +159,6 @@ const createAbilityCard = (
   panels: preset.panels,
 })
 
-const getAbilityScaledValue = (parsedRank: BoardAbilityRankInfo, factor: number, base: number) => (
-  parsedRank ? base + Math.round(parsedRank.currentRank * factor) : base
-)
-
 type BoardAbilityRowValue = string | HiddenClassAbilityPopupTextSegment[]
 
 const createActiveRows = (
