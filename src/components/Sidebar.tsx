@@ -9,6 +9,7 @@ import {
   LogOut,
   Moon,
   ShoppingBag,
+  Swords,
   Sun,
   User,
   UserCog,
@@ -34,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
     { id: 'rankings', label: 'Members', icon: <Users size={18} strokeWidth={1.75} /> },
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={18} strokeWidth={1.75} /> },
+    { id: 'hidden-classes', label: 'Hidden Classes', icon: <Swords size={18} strokeWidth={1.75} /> },
   ];
 
   const managementMenuItems = userType === 'admin'
