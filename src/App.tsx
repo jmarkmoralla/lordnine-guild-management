@@ -11,6 +11,7 @@ import ManageMarketplacePage from './components/ManageMarketplacePage'
 import ManageBossTimerPage from './components/ManageBossTimerPage'
 import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
 import RelicCalculatorPage from './components/RelicCalculatorPage'
+import HiddenClassesPage from './components/HiddenClassesPage'
 import LoginPage from './components/LoginPage'
 import ManageAdminsPage from './components/ManageAdminsPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
@@ -22,6 +23,7 @@ const VALID_PAGE_KEYS = new Set([
   'attendance',
   'manage-attendance',
   'rankings',
+  'hidden-classes',
   'marketplace',
   'manage-members',
   'manage-marketplace',
@@ -109,6 +111,8 @@ function App() {
         return <ManageGuildAttendancePage userType={userType!} />
       case 'rankings':
         return <RankingsPage />
+      case 'hidden-classes':
+        return <HiddenClassesPage />
       case 'marketplace':
         return <MarketplacePage />
       case 'manage-members':
