@@ -227,12 +227,19 @@
 .relic-chest-table {
   margin-top: 0.65rem;
   width: 100%;
+  min-width: 520px;
   border-collapse: collapse;
   border: 1px solid var(--border-light);
   border-radius: 10px;
   overflow: hidden;
   background: var(--bg-secondary);
   box-shadow: 0 2px 10px var(--shadow-light);
+}
+
+.relic-chest-table-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .relic-total-chest-card {
@@ -673,6 +680,10 @@
   .relic-chest-table td {
     font-size: 0.72rem;
     padding: 0.38rem 0.36rem;
+  }
+
+  .relic-chest-table {
+    min-width: 500px;
   }
 
   .relic-result-value {

@@ -34,6 +34,22 @@ const VALID_PAGE_KEYS = new Set([
   'boss-timer',
 ])
 
+const PAGE_TITLES: Record<string, string> = {
+  dashboard: 'Dashboard',
+  attendance: 'Attendance',
+  'manage-attendance': 'Manage Attendance',
+  rankings: 'Members',
+  'hidden-classes': 'Hidden Classes',
+  marketplace: 'Marketplace',
+  'manage-members': 'Manage Members',
+  'manage-marketplace': 'Manage Marketplace',
+  'manage-admins': 'Manage Admins',
+  'manage-boss-timer': 'Manage Boss Timer',
+  'manage-boss-notifier': 'Field Boss Notifier',
+  'relic-calculator': 'Relic Calculator',
+  'boss-timer': 'Boss Timer',
+}
+
 const getPageFromUrl = () => {
   const searchParams = new URLSearchParams(window.location.search)
   const page = searchParams.get('page')
@@ -49,6 +65,7 @@ function App() {
   const { isAdmin, role, canManageAdmins, user, logout } = useFirebaseAuth()
   const [activePage, setActivePage] = useState(getPageFromUrl)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedMode = localStorage.getItem('darkMode')
     return savedMode ? JSON.parse(savedMode) : false
@@ -67,6 +84,14 @@ function App() {
       document.documentElement.classList.remove('dark-mode')
     }
   }, [isDarkMode])
+
+  useEffect(() => {
+    document.body.classList.toggle('sidebar-open', isSidebarOpen)
+
+    return () => {
+      document.body.classList.remove('sidebar-open')
+    }
+  }, [isSidebarOpen])
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -92,6 +117,20 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 900) {
+        setIsSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
   const handleLogout = async () => {
     try {
       await logout()
@@ -100,6 +139,13 @@ function App() {
       console.error('Logout failed:', error)
     }
   }
+
+  const handleNavigate = (page: string) => {
+    setActivePage(page)
+    setIsSidebarOpen(false)
+  }
+
+  const currentPageTitle = PAGE_TITLES[activePage] || 'Dashboard'
 
   const renderPage = () => {
     switch (activePage) {
@@ -138,16 +184,37 @@ function App() {
   const handleCloseLogin = () => setShowLoginModal(false)
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+      <div className="app-mobile-bar">
+        <button
+          type="button"
+          className="app-mobile-menu-btn"
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <span className="app-mobile-menu-glyph" aria-hidden="true">☰</span>
+        </button>
+        <div className="app-mobile-title">{currentPageTitle}</div>
+      </div>
+      {isSidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-label="Close navigation menu"
+        />
+      )}
       <Sidebar 
         activePage={activePage} 
-        onNavigate={setActivePage}
+        onNavigate={handleNavigate}
         userType={userType}
         userRole={role}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         onLogout={handleLogout}
         onRequestSignIn={handleOpenLogin}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
       <main className="main-content">
         {renderPage()}

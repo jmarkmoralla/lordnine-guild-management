@@ -310,26 +310,28 @@ const RelicCalculatorPage: React.FC<RelicCalculatorPageProps> = ({ userType }) =
           <h3>Temporal Chest Requirement</h3>
         </div>
 
-        <table className="relic-chest-table" aria-label="Total chest requirements for all relics">
-          <thead>
-            <tr>
-              <th>Tier</th>
-              <th>TP/Chest</th>
-              <th>Qty</th>
-              <th>Total TP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {totalChestRequirements.map((chestTier) => (
-              <tr key={`total-${chestTier.tier}`}>
-                <td>{chestTier.tier}</td>
-                <td>{chestTier.temporalPiecePerChest.toLocaleString()}</td>
-                <td>{chestTier.requiredChests.toLocaleString()}</td>
-                <td>{chestTier.totalTierTp.toLocaleString()}</td>
+        <div className="relic-chest-table-container">
+          <table className="relic-chest-table" aria-label="Total chest requirements for all relics">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>TP/Chest</th>
+                <th>Qty</th>
+                <th>Total TP</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {totalChestRequirements.map((chestTier) => (
+                <tr key={`total-${chestTier.tier}`}>
+                  <td>{chestTier.tier}</td>
+                  <td>{chestTier.temporalPiecePerChest.toLocaleString()}</td>
+                  <td>{chestTier.requiredChests.toLocaleString()}</td>
+                  <td>{chestTier.totalTierTp.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {isConfigModalOpen && userType === 'admin' && (
