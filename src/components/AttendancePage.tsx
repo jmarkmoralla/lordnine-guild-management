@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import Fuse from 'fuse.js';
-import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, TableOfContents, Trash2, Wallet, X } from 'lucide-react';
+import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, TableOfContents, Wallet, X } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import '../styles/Attendance.css';
@@ -53,6 +53,89 @@ interface OcrAttendanceRow {
   autoApplied: boolean;
   source: OcrSourceKind;
 }
+
+interface MemberAttendanceDetail {
+  id: string;
+  attendanceType: string;
+  bossName: string;
+  attendanceDate: string;
+  status: AttendanceStatus;
+  multiplier: number;
+}
+
+type SummaryColumnKey =
+  | 'kransia'
+  | 'fieldBoss'
+  | 'guildBoss'
+  | 'guildvsguild'
+  | 'totalPts'
+  | 'participation'
+  | 'percentage'
+  | 'usdtShare'
+  | 'multiplier';
+
+interface SummaryColumnDefinition {
+  key: SummaryColumnKey;
+  label: string;
+}
+
+const SUMMARY_COLUMNS: SummaryColumnDefinition[] = [
+  { key: 'kransia', label: 'Kransia' },
+  { key: 'fieldBoss', label: 'Field Boss' },
+  { key: 'guildBoss', label: 'Guild Boss' },
+  { key: 'guildvsguild', label: 'Guild vs Guild' },
+  { key: 'totalPts', label: 'Total Pts' },
+  { key: 'participation', label: 'Participation' },
+  { key: 'percentage', label: '%' },
+  { key: 'usdtShare', label: 'USDT Share' },
+  { key: 'multiplier', label: 'Multiplier' },
+];
+
+const DEFAULT_VISIBLE_SUMMARY_COLUMNS: Record<SummaryColumnKey, boolean> = {
+  kransia: true,
+  fieldBoss: true,
+  guildBoss: true,
+  guildvsguild: true,
+  totalPts: true,
+  participation: true,
+  percentage: true,
+  usdtShare: true,
+  multiplier: true,
+};
+
+const SUMMARY_COLUMNS_STORAGE_KEY = 'attendance-summary-visible-columns';
+
+const loadVisibleSummaryColumns = (): Record<SummaryColumnKey, boolean> => {
+  if (typeof window === 'undefined') {
+    return { ...DEFAULT_VISIBLE_SUMMARY_COLUMNS };
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(SUMMARY_COLUMNS_STORAGE_KEY);
+    if (!storedValue) {
+      return { ...DEFAULT_VISIBLE_SUMMARY_COLUMNS };
+    }
+
+    const parsedValue = JSON.parse(storedValue) as Partial<Record<SummaryColumnKey, boolean>>;
+    const mergedValue: Record<SummaryColumnKey, boolean> = {
+      ...DEFAULT_VISIBLE_SUMMARY_COLUMNS,
+      ...Object.fromEntries(
+        Object.entries(parsedValue).filter((entry): entry is [SummaryColumnKey, boolean] => (
+          Object.prototype.hasOwnProperty.call(DEFAULT_VISIBLE_SUMMARY_COLUMNS, entry[0])
+          && typeof entry[1] === 'boolean'
+        ))
+      ),
+    };
+
+    if (!Object.values(mergedValue).some(Boolean)) {
+      return { ...DEFAULT_VISIBLE_SUMMARY_COLUMNS };
+    }
+
+    return mergedValue;
+  } catch {
+    return { ...DEFAULT_VISIBLE_SUMMARY_COLUMNS };
+  }
+};
 
 const DEFAULT_OCR_PROXY_PATH = '/api/ocr-space';
 const OCR_SPACE_ENDPOINT = import.meta.env.VITE_OCR_SPACE_ENDPOINT?.trim() || 'https://api.ocr.space/parse/image';
@@ -1213,9 +1296,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [selectedGuildFilter, setSelectedGuildFilter] = useState('');
   const [manageSelectedGuildFilter, setManageSelectedGuildFilter] = useState('');
   const [createSelectedGuildFilter, setCreateSelectedGuildFilter] = useState('');
+  const [visibleSummaryColumns, setVisibleSummaryColumns] = useState<Record<SummaryColumnKey, boolean>>(() => loadVisibleSummaryColumns());
   const [statusFilter, setStatusFilter] = useState<'all' | AttendanceStatus | 'unmarked'>('all');
   const [isCreateAttendanceOpen, setIsCreateAttendanceOpen] = useState(false);
   const [isResetAttendanceConfirmOpen, setIsResetAttendanceConfirmOpen] = useState(false);
+  const [isSummaryColumnsOpen, setIsSummaryColumnsOpen] = useState(false);
   const [resetAdminPassword, setResetAdminPassword] = useState('');
   const [showResetAdminPassword, setShowResetAdminPassword] = useState(false);
   const [resetConfirmError, setResetConfirmError] = useState<string | null>(null);
@@ -1238,18 +1323,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [editingMetricValue, setEditingMetricValue] = useState('');
   const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [viewingMemberName, setViewingMemberName] = useState<string | null>(null);
-  const [memberAttendanceDetails, setMemberAttendanceDetails] = useState<Array<{
-    id: string;
-    attendanceType: string;
-    bossName: string;
-    attendanceDate: string;
-    status: AttendanceStatus;
-    multiplier: number;
-  }>>([]);
+  const [memberAttendanceDetails, setMemberAttendanceDetails] = useState<MemberAttendanceDetail[]>([]);
+  const [selectedAttendanceDetailIds, setSelectedAttendanceDetailIds] = useState<string[]>([]);
   const [isLoadingMemberDetails, setIsLoadingMemberDetails] = useState(false);
   const [memberDetailsError, setMemberDetailsError] = useState<string | null>(null);
-  const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
+  const [isBulkDeletingAttendanceDetails, setIsBulkDeletingAttendanceDetails] = useState(false);
   const bossDropdownRef = useRef<HTMLDivElement | null>(null);
+  const summaryColumnsDropdownRef = useRef<HTMLDivElement | null>(null);
   const ocrFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { members, loading: membersLoading, error: membersError } = useFirestoreMembers();
@@ -1404,6 +1484,25 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   }, [isBossDropdownOpen, bossSearchQuery]);
 
   useEffect(() => {
+    if (!isSummaryColumnsOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!summaryColumnsDropdownRef.current) return;
+      if (!summaryColumnsDropdownRef.current.contains(event.target as Node)) {
+        setIsSummaryColumnsOpen(false);
+      }
+    };
+
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [isSummaryColumnsOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SUMMARY_COLUMNS_STORAGE_KEY, JSON.stringify(visibleSummaryColumns));
+  }, [visibleSummaryColumns]);
+
+  useEffect(() => {
     setBossSearchQuery('');
   }, [attendanceType]);
 
@@ -1415,6 +1514,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const guildFilterOptions = useMemo(
     () => Array.from(new Set(members.map((member) => normalizeGuildFilterValue(member.guildName)))).sort((first, second) => first.localeCompare(second)),
     [members]
+  );
+
+  const visibleSummaryColumnDefinitions = useMemo(
+    () => SUMMARY_COLUMNS.filter((column) => visibleSummaryColumns[column.key]),
+    [visibleSummaryColumns]
   );
 
   const membersWithAttendance = useMemo(() => {
@@ -2513,7 +2617,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsConfirmingResetAttendance(false);
   };
 
-  const deleteCollectionDocuments = async (collectionName: 'guildAttendance' | 'guildAttendanceSummary') => {
+  const deleteCollectionDocuments = async (
+    collectionName: 'guildAttendance' | 'guildAttendanceSummary' | 'attendanceSessions'
+  ) => {
     const snapshot = await getDocs(collection(db, collectionName));
     if (snapshot.empty) return;
 
@@ -2532,6 +2638,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const deleteAllAttendanceRecords = async () => {
     await deleteCollectionDocuments('guildAttendance');
     await deleteCollectionDocuments('guildAttendanceSummary');
+    await deleteCollectionDocuments('attendanceSessions');
   };
 
   const confirmResetAttendance = async () => {
@@ -2807,6 +2914,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     () => manageSummaryRowsComputed.reduce((sum, row) => sum + row.computedTotalAttendance, 0),
     [manageSummaryRowsComputed]
   );
+  const summaryTableColumnCount = visibleSummaryColumnDefinitions.length + 3;
   const isResetAttendanceDisabled = isClearingAll || loading || manageSummaryRowsComputed.length === 0;
   const hasDraftAttendanceSelections = useMemo(
     () => Object.values(draftAttendanceByMemberId).some((status) => status !== 'unmarked'),
@@ -2817,6 +2925,92 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     [membersWithAttendance]
   );
   const isModalClearAllDisabled = isClearingAll || loading || (!hasDraftAttendanceSelections && ocrRows.length === 0);
+
+  const toggleSummaryColumnVisibility = (columnKey: SummaryColumnKey) => {
+    setVisibleSummaryColumns((current) => {
+      const visibleColumnCount = SUMMARY_COLUMNS.filter((column) => current[column.key]).length;
+      if (current[columnKey] && visibleColumnCount === 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [columnKey]: !current[columnKey],
+      };
+    });
+  };
+
+  const renderSummaryMetricHeaders = () => visibleSummaryColumnDefinitions.map((column) => (
+    <th key={column.key}>{column.label}</th>
+  ));
+
+  const renderSummaryMetricCells = (row: (typeof summaryRowsComputed)[number]) => visibleSummaryColumnDefinitions.map((column) => {
+    switch (column.key) {
+      case 'kransia':
+        return <td key={column.key} className="member-date">{row.kransia}</td>;
+      case 'fieldBoss':
+        return <td key={column.key} className="member-date">{row.fieldBoss}</td>;
+      case 'guildBoss':
+        return <td key={column.key} className="member-date">{row.guildBoss}</td>;
+      case 'guildvsguild':
+        return <td key={column.key} className="member-date">{row.guildvsguild}</td>;
+      case 'totalPts':
+        return <td key={column.key} className="member-date">{row.computedTotalAttendance}</td>;
+      case 'participation':
+        return <td key={column.key} className="member-date">{row.participationPercent.toFixed(2)}%</td>;
+      case 'percentage':
+        return <td key={column.key} className="member-date">{row.computedPercentage.toFixed(2)}%</td>;
+      case 'usdtShare':
+        return (
+          <td key={column.key} className="member-date">
+            ${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </td>
+        );
+      case 'multiplier':
+        return <td key={column.key} className="member-date">{row.computedMultiplier.toFixed(1)}</td>;
+      default:
+        return null;
+    }
+  });
+
+  const summaryColumnsToggle = (
+    <div className="attendance-summary-columns" ref={summaryColumnsDropdownRef}>
+      <button
+        type="button"
+        className="attendance-summary-columns-btn"
+        onClick={() => setIsSummaryColumnsOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={isSummaryColumnsOpen}
+      >
+        Columns
+        <ChevronDown size={15} strokeWidth={2} />
+      </button>
+      {isSummaryColumnsOpen && (
+        <div className="attendance-summary-columns-menu" role="menu" aria-label="Summary columns">
+          <p className="attendance-summary-columns-title">Show or hide columns</p>
+          {SUMMARY_COLUMNS.map((column) => {
+            const visibleColumnCount = visibleSummaryColumnDefinitions.length;
+            const isLastVisibleColumn = visibleSummaryColumns[column.key] && visibleColumnCount === 1;
+
+            return (
+              <label
+                key={column.key}
+                className={`attendance-summary-columns-item${isLastVisibleColumn ? ' is-disabled' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={visibleSummaryColumns[column.key]}
+                  onChange={() => toggleSummaryColumnVisibility(column.key)}
+                  disabled={isLastVisibleColumn}
+                />
+                <span>{column.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   const startMetricEdit = (currentValue: number) => {
     setEditingMetric('totalFund');
@@ -2856,6 +3050,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsLoadingMemberDetails(true);
     setMemberDetailsError(null);
     setMemberAttendanceDetails([]);
+    setSelectedAttendanceDetailIds([]);
+    setIsBulkDeletingAttendanceDetails(false);
 
     try {
       const memberAttendanceQuery = query(
@@ -2912,9 +3108,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const closeMemberAttendanceDetails = () => {
     setViewingMemberName(null);
     setMemberAttendanceDetails([]);
+    setSelectedAttendanceDetailIds([]);
     setMemberDetailsError(null);
     setIsLoadingMemberDetails(false);
-    setDeletingAttendanceId(null);
+    setIsBulkDeletingAttendanceDetails(false);
   };
 
   const handleSummaryWalletCopy = async (summaryId: string, walletAddress: string) => {
@@ -2937,45 +3134,88 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     return datePart || '-';
   };
 
-  const deleteAttendanceDetail = async (attendance: {
-    id: string;
-    attendanceType: string;
-    bossName: string;
-    attendanceDate: string;
-  }) => {
-    const attendanceDateLabel = formatAttendanceDateOnly(attendance.attendanceDate);
-    const confirmationMessage = [
-      'Delete this attendance record?',
-      '',
-      `Type: ${attendance.attendanceType || '-'}`,
-      `Boss: ${attendance.bossName || '-'}`,
-      `Date: ${attendanceDateLabel}`,
-    ].join('\n');
+  const cleanupAttendanceSessionIfEmpty = async (attendance: Pick<MemberAttendanceDetail, 'attendanceDate' | 'attendanceType' | 'bossName'>) => {
+    const sessionId = buildAttendanceSessionIdFromAttendanceDate(
+      attendance.attendanceDate,
+      attendance.attendanceType,
+      attendance.bossName
+    );
+    const [sessionDate] = attendance.attendanceDate.split('T');
+
+    if (!sessionId || !sessionDate) {
+      return;
+    }
+
+    const attendanceQuery = query(
+      collection(db, 'guildAttendance'),
+      where('attendanceDate', '>=', `${sessionDate}T00:00:00+08:00`),
+      where('attendanceDate', '<=', `${sessionDate}T23:59:59+08:00`)
+    );
+    const snapshot = await getDocs(attendanceQuery);
+    const hasRemainingRowsForSession = snapshot.docs.some((attendanceDoc) => {
+      const data = attendanceDoc.data() as {
+        attendanceType?: string;
+        bossName?: string;
+        attendanceDate?: string;
+        attendanceSessionId?: string;
+      };
+      const logicalSessionId = data.attendanceSessionId?.trim()
+        || buildAttendanceSessionIdFromAttendanceDate(
+          data.attendanceDate || '',
+          data.attendanceType || '',
+          data.bossName || ''
+        );
+
+      return logicalSessionId === sessionId;
+    });
+
+    if (!hasRemainingRowsForSession) {
+      await deleteDoc(doc(db, 'attendanceSessions', sessionId));
+    }
+  };
+
+  const deleteAttendanceDetails = async (
+    attendances: MemberAttendanceDetail[],
+    confirmationMessage: string
+  ) => {
+    if (attendances.length === 0) return;
 
     const isConfirmed = window.confirm(confirmationMessage);
     if (!isConfirmed) return;
 
-    try {
-      setDeletingAttendanceId(attendance.id);
-      await deleteDoc(doc(db, 'guildAttendance', attendance.id));
-      setMemberAttendanceDetails((current) => current.filter((currentAttendance) => currentAttendance.id !== attendance.id));
+    const attendanceIds = new Set(attendances.map((attendance) => attendance.id));
+    const sessionTargets = Array.from(
+      new Map(
+        attendances.map((attendance) => {
+          const sessionId = buildAttendanceSessionIdFromAttendanceDate(
+            attendance.attendanceDate,
+            attendance.attendanceType,
+            attendance.bossName
+          );
 
-      // After deleting the attendance, check if any attendance rows remain for the same session
-      // If none, hard delete the attendanceSessions doc
-      // Rebuild the session ID from the attendance row
-      const sessionId = buildAttendanceSessionIdFromAttendanceDate(
-        attendance.attendanceDate,
-        attendance.attendanceType,
-        attendance.bossName
-      );
-      const attendanceQuery = query(
-        collection(db, 'guildAttendance'),
-        where('attendanceSessionId', '==', sessionId)
-      );
-      const snapshot = await getDocs(attendanceQuery);
-      if (snapshot.empty) {
-        await deleteDoc(doc(db, 'attendanceSessions', sessionId));
+          return [sessionId, attendance] as const;
+        })
+      ).values()
+    );
+
+    try {
+      setIsBulkDeletingAttendanceDetails(true);
+
+      const docsToDelete = attendances.map((attendance) => doc(db, 'guildAttendance', attendance.id));
+      const batchSize = 400;
+
+      for (let start = 0; start < docsToDelete.length; start += batchSize) {
+        const batch = writeBatch(db);
+        docsToDelete.slice(start, start + batchSize).forEach((docRef) => {
+          batch.delete(docRef);
+        });
+        await batch.commit();
       }
+
+      setMemberAttendanceDetails((current) => current.filter((attendance) => !attendanceIds.has(attendance.id)));
+      setSelectedAttendanceDetailIds((current) => current.filter((attendanceId) => !attendanceIds.has(attendanceId)));
+
+      await Promise.all(sessionTargets.map((attendance) => cleanupAttendanceSessionIfEmpty(attendance)));
 
       if (viewingMemberName) {
         await refreshSummaryForMember(viewingMemberName);
@@ -2984,9 +3224,48 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       console.error('Failed to delete attendance detail:', deleteError);
       setMemberDetailsError('Failed to delete attendance record. Please try again.');
     } finally {
-      setDeletingAttendanceId(null);
+      setIsBulkDeletingAttendanceDetails(false);
     }
   };
+
+  const toggleAttendanceDetailSelection = (attendanceId: string) => {
+    setSelectedAttendanceDetailIds((current) => (
+      current.includes(attendanceId)
+        ? current.filter((currentId) => currentId !== attendanceId)
+        : [...current, attendanceId]
+    ));
+  };
+
+  const toggleAllAttendanceDetailSelections = () => {
+    setSelectedAttendanceDetailIds((current) => (
+      current.length === memberAttendanceDetails.length
+        ? []
+        : memberAttendanceDetails.map((attendance) => attendance.id)
+    ));
+  };
+
+  const bulkDeleteAttendanceDetails = async () => {
+    const attendancesToDelete = memberAttendanceDetails.filter((attendance) => (
+      selectedAttendanceDetailIds.includes(attendance.id)
+    ));
+
+    if (attendancesToDelete.length === 0) return;
+
+    const confirmationMessage = [
+      attendancesToDelete.length === 1
+        ? 'Delete the selected attendance record?'
+        : `Delete ${attendancesToDelete.length} attendance records?`,
+      '',
+      `Member: ${viewingMemberName || '-'}`,
+      'This will also update the related summary and remove any empty attendance sessions.',
+    ].join('\n');
+
+    await deleteAttendanceDetails(attendancesToDelete, confirmationMessage);
+  };
+
+  const isDeletingAttendanceDetails = isBulkDeletingAttendanceDetails;
+  const areAllAttendanceDetailsSelected = memberAttendanceDetails.length > 0
+    && selectedAttendanceDetailIds.length === memberAttendanceDetails.length;
 
   const memberAttendanceTable = (
     <div className="attendance-table-container">
@@ -3233,6 +3512,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <option key={guildOption} value={guildOption}>{guildOption}</option>
                 ))}
               </select>
+              {summaryColumnsToggle}
             </div>
             <button
               type="button"
@@ -3268,15 +3548,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               <tr>
                 <th>No.</th>
                 <th className="summary-name-col">Name</th>
-                <th>Kransia</th>
-                <th>Field Boss</th>
-                <th>Guild Boss</th>
-                <th>Guild vs Guild</th>
-                <th>Total Pts</th>
-                <th>Participation</th>
-                <th>%</th>
-                <th>USDT Share</th>
-                <th>Multiplier</th>
+                {renderSummaryMetricHeaders()}
                 <th className="summary-action-col">Action</th>
               </tr>
             </thead>
@@ -3297,15 +3569,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                       )}
                     </div>
                   </td>
-                  <td className="member-date">{row.kransia}</td>
-                  <td className="member-date">{row.fieldBoss}</td>
-                  <td className="member-date">{row.guildBoss}</td>
-                  <td className="member-date">{row.guildvsguild}</td>
-                  <td className="member-date">{row.computedTotalAttendance}</td>
-                  <td className="member-date">{row.participationPercent.toFixed(2)}%</td>
-                  <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
-                  <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                  <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
+                  {renderSummaryMetricCells(row)}
                   <td className="summary-action-cell">
                     <div className="summary-action-buttons">
                       <button
@@ -3337,7 +3601,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && manageSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="attendance-empty-row">
+                  <td colSpan={summaryTableColumnCount} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -3346,13 +3610,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             {!loading && manageSummaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
-                  <td className="summary-footer-value">{manageFilteredTotalAttendance.toLocaleString()}</td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
+                  <td colSpan={summaryTableColumnCount} className="summary-footer-label summary-footer-total-row">
+                    Total Points (as of {currentDateLabel}): {manageFilteredTotalAttendance.toLocaleString()}
+                  </td>
                 </tr>
               </tfoot>
             )}
@@ -3368,15 +3628,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               <tr>
                 <th>No.</th>
                 <th className="summary-name-col">Name</th>
-                <th>Kransia</th>
-                <th>Field Boss</th>
-                <th>Guild Boss</th>
-                <th>Guild vs Guild</th>
-                <th>Total Pts</th>
-                <th>Participation</th>
-                <th>%</th>
-                <th>USDT Share</th>
-                <th>Multiplier</th>
+                {renderSummaryMetricHeaders()}
                 <th className="summary-action-col">View</th>
               </tr>
             </thead>
@@ -3397,15 +3649,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                       )}
                     </div>
                   </td>
-                  <td className="member-date">{row.kransia}</td>
-                  <td className="member-date">{row.fieldBoss}</td>
-                  <td className="member-date">{row.guildBoss}</td>
-                  <td className="member-date">{row.guildvsguild}</td>
-                  <td className="member-date">{row.computedTotalAttendance}</td>
-                  <td className="member-date">{row.participationPercent.toFixed(2)}%</td>
-                  <td className="member-date">{row.computedPercentage.toFixed(2)}%</td>
-                  <td className="member-date">${row.computedUsdtShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                  <td className="member-date">{row.computedMultiplier.toFixed(1)}</td>
+                  {renderSummaryMetricCells(row)}
                   <td className="summary-action-cell">
                     <div className="summary-action-buttons">
                       <button
@@ -3423,7 +3667,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               ))}
               {!loading && guestSummaryRowsComputed.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="attendance-empty-row">
+                  <td colSpan={summaryTableColumnCount} className="attendance-empty-row">
                     No guild attendance summary records found.
                   </td>
                 </tr>
@@ -3432,13 +3676,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             {!loading && guestSummaryRowsComputed.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={6} className="summary-footer-label">Total Points (as of {currentDateLabel})</td>
-                  <td className="summary-footer-value">{guestFilteredTotalAttendance.toLocaleString()}</td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
+                  <td colSpan={summaryTableColumnCount} className="summary-footer-label summary-footer-total-row">
+                    Total Points (as of {currentDateLabel}): {guestFilteredTotalAttendance.toLocaleString()}
+                  </td>
                 </tr>
               </tfoot>
             )}
@@ -3869,13 +4109,27 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <h3>{viewingMemberName}</h3>
                 <p className="attendance-details-subtitle">Attendance details</p>
               </div>
-              <button
-                className="attendance-modal-close"
-                onClick={closeMemberAttendanceDetails}
-                aria-label="Close"
-              >
-                ×
-              </button>
+              <div className="attendance-details-header-actions">
+                {canManage && (
+                  <button
+                    type="button"
+                    className="attendance-details-bulk-delete-btn"
+                    onClick={bulkDeleteAttendanceDetails}
+                    disabled={selectedAttendanceDetailIds.length === 0 || isDeletingAttendanceDetails}
+                  >
+                    {isBulkDeletingAttendanceDetails
+                      ? 'Deleting...'
+                      : `Delete Selected (${selectedAttendanceDetailIds.length})`}
+                  </button>
+                )}
+                <button
+                  className="attendance-modal-close"
+                  onClick={closeMemberAttendanceDetails}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             {isLoadingMemberDetails && (
@@ -3902,7 +4156,18 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                       <th className="details-col-multiplier">Multiplier</th>
                       <th className="details-col-date">Date</th>
                       <th className="details-col-status">Status</th>
-                      {canManage && <th className="details-col-action">Action</th>}
+                      {canManage && (
+                        <th className="details-col-select">
+                          <input
+                            type="checkbox"
+                            className="details-select-input"
+                            checked={areAllAttendanceDetailsSelected}
+                            onChange={toggleAllAttendanceDetailSelections}
+                            disabled={memberAttendanceDetails.length === 0 || isDeletingAttendanceDetails}
+                            aria-label="Select all attendance records"
+                          />
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -3918,23 +4183,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         <td className="details-cell-date">{formatAttendanceDateOnly(attendance.attendanceDate)}</td>
                         <td className="details-cell-status">{getStatusBadge(attendance.status)}</td>
                         {canManage && (
-                          <td className="details-cell-action">
-                            <button
-                              type="button"
-                              className="summary-edit-btn details-delete-btn"
-                              aria-label="Delete attendance"
-                              onClick={() => deleteAttendanceDetail(attendance)}
-                              disabled={deletingAttendanceId === attendance.id}
-                              title={deletingAttendanceId === attendance.id ? 'Deleting...' : 'Delete attendance'}
-                            >
-                              <span className="summary-edit-glyph" aria-hidden="true">
-                                {deletingAttendanceId === attendance.id ? (
-                                  <Loader className="details-delete-icon" size={16} strokeWidth={2} />
-                                ) : (
-                                  <Trash2 className="details-delete-icon" size={16} strokeWidth={2} />
-                                )}
-                              </span>
-                            </button>
+                          <td className="details-cell-select">
+                            <input
+                              type="checkbox"
+                              className="details-select-input"
+                              checked={selectedAttendanceDetailIds.includes(attendance.id)}
+                              onChange={() => toggleAttendanceDetailSelection(attendance.id)}
+                              disabled={isDeletingAttendanceDetails}
+                              aria-label={`Select attendance record ${index + 1}`}
+                            />
                           </td>
                         )}
                       </tr>

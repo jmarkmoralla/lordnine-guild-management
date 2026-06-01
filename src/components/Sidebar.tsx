@@ -27,9 +27,11 @@ interface SidebarProps {
   onToggleDarkMode: () => void;
   onLogout: () => void;
   onRequestSignIn?: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn, isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
@@ -59,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
     : [];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-header">
         <div className="guild-header">
           <div className="guild-logo" title="Guild Logo - Admin can update">
@@ -70,6 +72,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
             <p className="guild-subtitle">Guild Management</p>
           </div>
         </div>
+        <button
+          type="button"
+          className="sidebar-mobile-close"
+          onClick={onClose}
+          aria-label="Close navigation menu"
+        >
+          <span className="sidebar-mobile-close-glyph" aria-hidden="true">☰</span>
+        </button>
       </div>
 
       <nav className="sidebar-nav">

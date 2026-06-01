@@ -217,7 +217,9 @@
 .rankings-table-container {
   background: var(--bg-secondary);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 4px 12px var(--shadow-light);
   margin-bottom: 2rem;
   border: 1px solid var(--border-light);
@@ -225,6 +227,7 @@
 
 .rankings-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -564,6 +567,7 @@ td.col-type {
 
   .rankings-table {
     font-size: 0.85rem;
+    min-width: 1040px;
   }
 
   .rankings-table th,
