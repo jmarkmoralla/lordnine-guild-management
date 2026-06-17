@@ -220,7 +220,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         };
 
         if (countField && effectiveBossCount > 0) {
-          const currentCount = Number((existing as Record<string, unknown>)[countField] || 0);
+          const currentCount = Number((existing as unknown as Record<string, unknown>)[countField] || 0);
           updateData[countField] = currentCount + effectiveBossCount;
         }
 
