@@ -8,9 +8,13 @@ export interface GuildAttendanceSummary {
   id: string;
   name: string;
   kransia: number;
+  kransiaCount: number;
   fieldBoss: number;
+  fieldBossCount: number;
   guildBoss: number;
+  guildBossCount: number;
   guildvsguild: number;
+  guildvsguildCount: number;
   totalAttendance: number;
   totalEventsAttended: number | null;
   totalPercentage: number;
@@ -26,7 +30,8 @@ interface UseFirestoreAttendanceSummaryReturn {
     attendanceType: string,
     presentMembers: Array<{ name: string; multiplier: number }>,
     attendancePoints?: number,
-    totalEventsAttendedIncrement?: number
+    totalEventsAttendedIncrement?: number,
+    bossCountIncrement?: number
   ) => Promise<void>;
   refreshSummaryForMember: (memberName: string) => Promise<void>;
 }
@@ -47,6 +52,17 @@ const getSummaryFieldByAttendanceType = (attendanceType: string): keyof SummaryE
   if (normalizedType === 'guild boss') return 'guildBoss';
   if (normalizedType === 'kransia') return 'kransia';
   if (normalizedType === 'guild vs. guild' || normalizedType === 'guild vs guild') return 'guildvsguild';
+
+  return null;
+};
+
+const getCountFieldByAttendanceType = (attendanceType: string): string | null => {
+  const normalizedType = normalizeAttendanceType(attendanceType);
+
+  if (normalizedType === 'field boss') return 'fieldBossCount';
+  if (normalizedType === 'guild boss') return 'guildBossCount';
+  if (normalizedType === 'kransia') return 'kransiaCount';
+  if (normalizedType === 'guild vs. guild' || normalizedType === 'guild vs guild') return 'guildvsguildCount';
 
   return null;
 };
@@ -88,9 +104,13 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
             id: summaryDoc.id,
             name: data.name || '',
             kransia: Number(data.kransia || 0),
+            kransiaCount: Number(data.kransiaCount || 0),
             fieldBoss: Number(data.fieldBoss || 0),
+            fieldBossCount: Number(data.fieldBossCount || 0),
             guildBoss: Number(data.guildBoss || 0),
+            guildBossCount: Number(data.guildBossCount || 0),
             guildvsguild: Number(data.guildvsguild || 0),
+            guildvsguildCount: Number(data.guildvsguildCount || 0),
             totalAttendance: Number(data.totalAttendance || 0),
             totalEventsAttended: data.totalEventsAttended === undefined ? null : Number(data.totalEventsAttended || 0),
             totalPercentage: Number(data.totalPercentage || 0),
@@ -142,9 +162,11 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     attendanceType: string,
     presentMembers: Array<{ name: string; multiplier: number }>,
     attendancePoints = getAttendancePoints(attendanceType),
-    totalEventsAttendedIncrement = 0
+    totalEventsAttendedIncrement = 0,
+    bossCountIncrement = 0
   ) => {
     const targetField = getSummaryFieldByAttendanceType(attendanceType);
+    const countField = getCountFieldByAttendanceType(attendanceType);
     if (!targetField) return;
 
     const normalizedAttendancePoints = Number(attendancePoints);
@@ -154,6 +176,11 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
 
     const existingByName = new Map(summaryRows.map((row) => [row.name.trim().toLowerCase(), row]));
     const batch = writeBatch(db);
+
+    const normalizedBossCount = Number(bossCountIncrement);
+    const effectiveBossCount = Number.isFinite(normalizedBossCount) && normalizedBossCount > 0
+      ? normalizedBossCount
+      : 0;
 
     presentMembers.forEach(({ name: memberName, multiplier }) => {
       const normalizedName = memberName.trim().toLowerCase();
@@ -183,16 +210,23 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         const nextTotalAttendance = computeTotalPoints(nextValues);
         const nextTotalEventsAttended = Number(existing.totalEventsAttended ?? 0) + effectiveEventsIncrement;
 
+        const updateData: Record<string, unknown> = {
+          kransia: nextValues.kransia,
+          fieldBoss: nextValues.fieldBoss,
+          guildBoss: nextValues.guildBoss,
+          guildvsguild: nextValues.guildvsguild,
+          totalAttendance: nextTotalAttendance,
+          totalEventsAttended: nextTotalEventsAttended,
+        };
+
+        if (countField && effectiveBossCount > 0) {
+          const currentCount = Number((existing as Record<string, unknown>)[countField] || 0);
+          updateData[countField] = currentCount + effectiveBossCount;
+        }
+
         batch.set(
           doc(db, 'guildAttendanceSummary', existing.id),
-          {
-            kransia: nextValues.kransia,
-            fieldBoss: nextValues.fieldBoss,
-            guildBoss: nextValues.guildBoss,
-            guildvsguild: nextValues.guildvsguild,
-            totalAttendance: nextTotalAttendance,
-            totalEventsAttended: nextTotalEventsAttended,
-          },
+          updateData,
           { merge: true }
         );
         return;
@@ -206,19 +240,25 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       };
       initialValues[targetField] = weightedAttendancePoints;
 
+      const newDocData: Record<string, unknown> = {
+        name: memberName,
+        kransia: initialValues.kransia,
+        fieldBoss: initialValues.fieldBoss,
+        guildBoss: initialValues.guildBoss,
+        guildvsguild: initialValues.guildvsguild,
+        totalAttendance: computeTotalPoints(initialValues),
+        totalEventsAttended: effectiveEventsIncrement,
+        totalPercentage: 0,
+        totalShareUSDT: 0,
+      };
+
+      if (countField && effectiveBossCount > 0) {
+        newDocData[countField] = effectiveBossCount;
+      }
+
       batch.set(
         doc(db, 'guildAttendanceSummary', sanitizeSummaryDocId(memberName)),
-        {
-          name: memberName,
-          kransia: initialValues.kransia,
-          fieldBoss: initialValues.fieldBoss,
-          guildBoss: initialValues.guildBoss,
-          guildvsguild: initialValues.guildvsguild,
-          totalAttendance: computeTotalPoints(initialValues),
-          totalEventsAttended: effectiveEventsIncrement,
-          totalPercentage: 0,
-          totalShareUSDT: 0,
-        },
+        newDocData,
         { merge: true }
       );
     });
@@ -242,6 +282,12 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       guildBoss: 0,
       guildvsguild: 0,
     };
+    const countValues: Record<string, number> = {
+      kransiaCount: 0,
+      fieldBossCount: 0,
+      guildBossCount: 0,
+      guildvsguildCount: 0,
+    };
     const attendedEvents = new Set<string>();
 
     attendanceSnapshot.docs.forEach((attendanceDoc) => {
@@ -254,13 +300,15 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
         status?: string;
       };
       const targetField = getSummaryFieldByAttendanceType(data.attendanceType || '');
-      if (!targetField) return;
+      const countField = getCountFieldByAttendanceType(data.attendanceType || '');
+      if (!targetField || !countField) return;
 
       const normalizedMultiplier = Number(data.multiplier ?? 1);
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier >= 0
         ? normalizedMultiplier
         : 1;
       nextValues[targetField] += getAttendancePoints(data.attendanceType || '', data.bossName || '') * effectiveMultiplier;
+      countValues[countField] += 1;
 
       const normalizedAttendanceType = normalizeAttendanceType(data.attendanceType || '');
       if (normalizedAttendanceType === EXCLUDED_PARTICIPATION_ATTENDANCE_TYPE || data.status !== 'Present') {
@@ -290,9 +338,13 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     await setDoc(doc(db, 'guildAttendanceSummary', summaryDocId), {
       name: existing?.name || memberName,
       kransia: nextValues.kransia,
+      kransiaCount: countValues.kransiaCount,
       fieldBoss: nextValues.fieldBoss,
+      fieldBossCount: countValues.fieldBossCount,
       guildBoss: nextValues.guildBoss,
+      guildBossCount: countValues.guildBossCount,
       guildvsguild: nextValues.guildvsguild,
+      guildvsguildCount: countValues.guildvsguildCount,
       totalAttendance,
       totalEventsAttended,
     }, { merge: true });

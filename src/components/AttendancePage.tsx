@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import Fuse from 'fuse.js';
-import { Check, ChevronDown, Clipboard, CloudBackup, Eye, EyeOff, ImageUp, Loader, Plus, Search, TableOfContents, Wallet, X } from 'lucide-react';
+import { Check, ChevronDown, Clipboard, CloudBackup, Download, Eye, EyeOff, ImageUp, Loader, Plus, Search, TableOfContents, Wallet, X } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import '../styles/Attendance.css';
@@ -15,6 +15,7 @@ import { getAttendancePoints, getAttendancePointsForBossSelection } from '../uti
 import { buildAttendanceSessionId, buildAttendanceSessionIdFromAttendanceDate } from '../utils/attendanceSession.ts';
 import { getCombatPowerMultiplier, MINIMUM_ATTENDANCE_COMBAT_POWER } from '../utils/combatPowerMultiplier.ts';
 import { getPhilippinesNowParts } from '../utils/philippinesTime';
+import { buildAndDownloadAttendanceWorkbook, type SummaryExportRow } from '../utils/exportToExcel';
 
 interface AttendancePageProps {
   userType: 'guest' | 'admin';
@@ -1318,6 +1319,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [selectedBossNames, setSelectedBossNames] = useState<string[]>([]);
   const [bossSearchQuery, setBossSearchQuery] = useState('');
   const [isBossDropdownOpen, setIsBossDropdownOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [copiedWalletSummaryId, setCopiedWalletSummaryId] = useState<string | null>(null);
   const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
   const [editingMetricValue, setEditingMetricValue] = useState('');
@@ -2777,7 +2779,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           attendanceType,
           presentMembersForSummary,
           selectedAttendancePoints,
-          isParticipationEligible ? selectedBossesToPersist.length : 0
+          isParticipationEligible ? selectedBossesToPersist.length : 0,
+          selectedBossesToPersist.length
         );
       }
 
@@ -3011,6 +3014,38 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       )}
     </div>
   );
+
+  const handleExportAttendance = () => {
+    if (isExporting || manageSummaryRowsComputed.length === 0) return;
+
+    setIsExporting(true);
+
+    try {
+      const summaryRows: SummaryExportRow[] = manageSummaryRowsComputed.map((row) => ({
+        name: row.name,
+        guildName: row.guildName,
+        kransia: row.kransia,
+        kransiaCount: row.kransiaCount,
+        fieldBoss: row.fieldBoss,
+        fieldBossCount: row.fieldBossCount,
+        guildBoss: row.guildBoss,
+        guildBossCount: row.guildBossCount,
+        guildvsguild: row.guildvsguild,
+        guildvsguildCount: row.guildvsguildCount,
+        computedTotalAttendance: row.computedTotalAttendance,
+        participationPercent: row.participationPercent,
+        computedPercentage: row.computedPercentage,
+        computedUsdtShare: row.computedUsdtShare,
+        computedMultiplier: row.computedMultiplier,
+      }));
+
+      buildAndDownloadAttendanceWorkbook(summaryRows);
+    } catch (error) {
+      console.error('Failed to export attendance report:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const startMetricEdit = (currentValue: number) => {
     setEditingMetric('totalFund');
@@ -3523,6 +3558,16 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               disabled={isResetAttendanceDisabled}
             >
               <CloudBackup size={16} strokeWidth={1.8} />
+            </button>
+            <button
+              type="button"
+              className="export-attendance-btn"
+              onClick={handleExportAttendance}
+              title="Export to Excel"
+              aria-label="Export to Excel"
+              disabled={isExporting || manageSummaryRowsComputed.length === 0}
+            >
+              {isExporting ? <Loader size={16} strokeWidth={1.8} /> : <Download size={16} strokeWidth={1.8} />}
             </button>
             <button
               type="button"
