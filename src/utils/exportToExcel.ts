@@ -4,13 +4,10 @@ export interface SummaryExportRow {
   name: string;
   guildName: string;
   kransia: number;
-  kransiaCount: number;
   fieldBoss: number;
-  fieldBossCount: number;
   guildBoss: number;
-  guildBossCount: number;
   guildvsguild: number;
-  guildvsguildCount: number;
+  totalEventsAttended: number;
   computedTotalAttendance: number;
   participationPercent: number;
   computedPercentage: number;
@@ -26,13 +23,10 @@ export function buildAndDownloadAttendanceWorkbook(
     'Name',
     'Guild',
     'Kransia',
-    'Kransia Count',
     'Field Boss',
-    'Field Boss Count',
     'Guild Boss',
-    'Guild Boss Count',
     'Guild vs Guild',
-    'Guild vs Guild Count',
+    'Total Events Attended',
     'Total Pts',
     'Participation%',
     '%',
@@ -45,13 +39,10 @@ export function buildAndDownloadAttendanceWorkbook(
     row.name,
     row.guildName,
     row.kransia,
-    row.kransiaCount,
     row.fieldBoss,
-    row.fieldBossCount,
     row.guildBoss,
-    row.guildBossCount,
     row.guildvsguild,
-    row.guildvsguildCount,
+    row.totalEventsAttended,
     row.computedTotalAttendance,
     Number(row.participationPercent.toFixed(2)),
     Number(row.computedPercentage.toFixed(2)),
@@ -66,13 +57,10 @@ export function buildAndDownloadAttendanceWorkbook(
     { wch: 22 },  // Name
     { wch: 14 },  // Guild
     { wch: 10 },  // Kransia
-    { wch: 14 },  // Kransia Count
     { wch: 12 },  // Field Boss
-    { wch: 16 },  // Field Boss Count
     { wch: 12 },  // Guild Boss
-    { wch: 14 },  // Guild Boss Count
     { wch: 16 },  // Guild vs Guild
-    { wch: 18 },  // Guild vs Guild Count
+    { wch: 22 },  // Total Events Attended
     { wch: 10 },  // Total Pts
     { wch: 16 },  // Participation%
     { wch: 8 },   // %
