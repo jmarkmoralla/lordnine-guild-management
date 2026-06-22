@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, Crosshair, Heart, Loader, Save, Settings, Shield, Zap } from 'lucide-react';
 import '../styles/RelicCalculator.css';
-import { buildDefaultTemporalPieceLevelMap, relicConfigs, type RelicKey } from '../data/relicCalculatorConfig';
+import { relicConfigs, type RelicKey } from '../data/relicCalculatorConfig';
 import { useFirestoreRelicTemporalPieceSettings } from '../hooks/useFirestoreRelicTemporalPieceSettings';
 
 const clampNumber = (value: number, min: number, max: number) => {
@@ -28,14 +28,14 @@ const relicCardClassMap: Record<RelicKey, string> = {
   'origin-of-destruction': 'relic-origin',
   'barrier-of-protection': 'relic-barrier',
   'crystal-of-life': 'relic-crystal',
-  'magic-storn': 'relic-magic',
+  'magic-storm': 'relic-magic',
 };
 
 const relicColorClassMap: Record<RelicKey, string> = {
   'origin-of-destruction': 'relic-color-origin',
   'barrier-of-protection': 'relic-color-barrier',
   'crystal-of-life': 'relic-color-crystal',
-  'magic-storn': 'relic-color-magic',
+  'magic-storm': 'relic-color-magic',
 };
 
 const renderRelicIcon = (relicId: RelicKey) => {
@@ -46,7 +46,7 @@ const renderRelicIcon = (relicId: RelicKey) => {
       return <Shield size={17} strokeWidth={1.9} className="relic-section-icon" />;
     case 'crystal-of-life':
       return <Heart size={17} strokeWidth={1.9} className="relic-section-icon" />;
-    case 'magic-storn':
+    case 'magic-storm':
       return <Zap size={17} strokeWidth={1.9} className="relic-section-icon" />;
     default:
       return <Calculator size={17} strokeWidth={1.9} className="relic-section-icon" />;
@@ -63,11 +63,11 @@ const RelicCalculatorPage: React.FC<RelicCalculatorPageProps> = ({ userType }) =
     'origin-of-destruction': { fromLevel: 0, toLevel: 0 },
     'barrier-of-protection': { fromLevel: 0, toLevel: 0 },
     'crystal-of-life': { fromLevel: 0, toLevel: 0 },
-    'magic-storn': { fromLevel: 0, toLevel: 0 },
+    'magic-storm': { fromLevel: 0, toLevel: 0 },
   });
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedRelicForConfig, setSelectedRelicForConfig] = useState<RelicKey>('origin-of-destruction');
-  const [draftLevelCostsByRelic, setDraftLevelCostsByRelic] = useState(buildDefaultTemporalPieceLevelMap());
+  const [draftLevelCostsByRelic, setDraftLevelCostsByRelic] = useState<Record<RelicKey, number[]>>({} as Record<RelicKey, number[]>);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSaveMessage, setConfigSaveMessage] = useState<string | null>(null);
   const isConfigSaveError = configSaveMessage?.toLowerCase().includes('failed') ?? false;
@@ -241,7 +241,6 @@ const RelicCalculatorPage: React.FC<RelicCalculatorPageProps> = ({ userType }) =
                   min={0}
                   max={100}
                   value={relicLevelEntries[relic.id].fromLevel}
-                  disabled={relic.id === 'magic-storn'}
                   onChange={(event) => handleLevelChange(relic.id, 'fromLevel', Number(event.target.value))}
                 />
               </label>
@@ -254,7 +253,6 @@ const RelicCalculatorPage: React.FC<RelicCalculatorPageProps> = ({ userType }) =
                   min={0}
                   max={100}
                   value={relicLevelEntries[relic.id].toLevel}
-                  disabled={relic.id === 'magic-storn'}
                   onChange={(event) => handleLevelChange(relic.id, 'toLevel', Number(event.target.value))}
                 />
               </label>
@@ -267,14 +265,6 @@ const RelicCalculatorPage: React.FC<RelicCalculatorPageProps> = ({ userType }) =
               <strong className="relic-selection-total">{relic.requiredTemporalPieces.toLocaleString()} TP</strong>
             </div>
 
-            {relic.id === 'magic-storn' && (
-              <div className="relic-maintenance-overlay" role="status" aria-live="polite">
-                <div className="relic-maintenance-overlay-content">
-                  <strong>Under Maintenance</strong>
-                  <span>Collecting data for the Magic Storm Relic</span>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { buildDefaultTemporalPieceLevelMap, type RelicKey } from '../data/relicCalculatorConfig';
+import { relicConfigs, type RelicKey } from '../data/relicCalculatorConfig';
 
 export interface RelicTemporalPieceSettings {
   levelCostsByRelic: Record<RelicKey, number[]>;
@@ -18,31 +18,36 @@ interface UseFirestoreRelicTemporalPieceSettingsReturn {
 const MAX_RELIC_LEVEL = 100;
 export const RELIC_TEMPORAL_PIECE_SETTINGS_DOC = doc(db, 'relicCalculator', 'temporalPieceSettings');
 
-const DEFAULT_SETTINGS: RelicTemporalPieceSettings = {
-  levelCostsByRelic: buildDefaultTemporalPieceLevelMap(),
+const EMPTY_SETTINGS: RelicTemporalPieceSettings = {
+  levelCostsByRelic: {} as Record<RelicKey, number[]>,
   updatedAt: '',
 };
 
+let cachedSettings: RelicTemporalPieceSettings | null = null;
+let fetchPromise: Promise<void> | null = null;
+
 const normalizeLevelCosts = (raw: unknown): Record<RelicKey, number[]> => {
-  const defaults = buildDefaultTemporalPieceLevelMap();
   const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const result = {} as Record<RelicKey, number[]>;
 
-  (Object.keys(defaults) as RelicKey[]).forEach((relicId) => {
-    const candidate = Array.isArray(record[relicId]) ? (record[relicId] as unknown[]) : [];
+  relicConfigs.forEach((relic) => {
+    let candidate = Array.isArray(record[relic.id]) ? (record[relic.id] as unknown[]) : [];
+
+    if (candidate.length === 0 && relic.id === 'magic-storm') {
+      const oldData = record['magic-storn'];
+      if (Array.isArray(oldData)) candidate = oldData as unknown[];
+    }
+
     const normalized = Array.from({ length: MAX_RELIC_LEVEL + 1 }, (_, level) => {
+      if (level === 0) return 0;
       const value = candidate[level];
-      if (typeof value !== 'number' || Number.isNaN(value)) {
-        return defaults[relicId][level];
-      }
-
+      if (typeof value !== 'number' || Number.isNaN(value)) return 0;
       return Math.max(0, Math.round(value));
     });
-
-    normalized[0] = 0;
-    defaults[relicId] = normalized;
+    result[relic.id] = normalized;
   });
 
-  return defaults;
+  return result;
 };
 
 const normalizeSettings = (raw: Partial<RelicTemporalPieceSettings> | undefined): RelicTemporalPieceSettings => {
@@ -53,37 +58,53 @@ const normalizeSettings = (raw: Partial<RelicTemporalPieceSettings> | undefined)
 };
 
 export const useFirestoreRelicTemporalPieceSettings = (): UseFirestoreRelicTemporalPieceSettingsReturn => {
-  const [settings, setSettings] = useState<RelicTemporalPieceSettings>(DEFAULT_SETTINGS);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<RelicTemporalPieceSettings>(
+    () => cachedSettings ?? EMPTY_SETTINGS
+  );
+  const [loading, setLoading] = useState(!cachedSettings);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      RELIC_TEMPORAL_PIECE_SETTINGS_DOC,
-      (snapshot) => {
+    if (cachedSettings) return;
+
+    const doFetch = async () => {
+      try {
+        const snapshot = await getDoc(RELIC_TEMPORAL_PIECE_SETTINGS_DOC);
         const raw = snapshot.exists() ? (snapshot.data() as Partial<RelicTemporalPieceSettings>) : undefined;
-        setSettings(normalizeSettings(raw));
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
+        const normalized = normalizeSettings(raw);
+        cachedSettings = normalized;
+        setSettings(normalized);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load relic temporal piece settings';
         console.error('Firestore relic temporal piece settings error:', err);
-        setError(err.message || 'Failed to load relic temporal piece settings');
+        setError(message);
+        fetchPromise = null;
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    if (!fetchPromise) {
+      fetchPromise = doFetch();
+    }
+
+    fetchPromise.then(() => {
+      setSettings(cachedSettings ?? EMPTY_SETTINGS);
+      setLoading(false);
+    });
   }, []);
 
   const saveSettings = async (levelCostsByRelic: Record<RelicKey, number[]>) => {
     try {
-      const payload: RelicTemporalPieceSettings = {
-        levelCostsByRelic: normalizeLevelCosts(levelCostsByRelic),
+      const normalized = normalizeLevelCosts(levelCostsByRelic);
+      const updatedSettings: RelicTemporalPieceSettings = {
+        levelCostsByRelic: normalized,
         updatedAt: new Date().toISOString(),
       };
 
-      await setDoc(RELIC_TEMPORAL_PIECE_SETTINGS_DOC, payload, { merge: true });
+      await setDoc(RELIC_TEMPORAL_PIECE_SETTINGS_DOC, updatedSettings, { merge: true });
+      cachedSettings = updatedSettings;
+      setSettings(updatedSettings);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save relic temporal piece settings';
       setError(message);
