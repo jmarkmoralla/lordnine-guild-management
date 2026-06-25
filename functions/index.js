@@ -651,3 +651,219 @@ exports.syncMarketplaceExchangeRate = onSchedule(
     });
   }
 );
+
+const NEXT_MARKET_API_BASE = 'https://api.nextmarket.games/l9asia';
+const MARKETPLACE_C2C_ENDPOINT = `${NEXT_MARKET_API_BASE}/v1/sale/c2c`;
+const MARKETPLACE_KEYWORD_SUGGESTION_ENDPOINT = `${NEXT_MARKET_API_BASE}/v1/sale/c2c/keyword/suggestion`;
+const MAX_C2C_PAGES = 15;
+
+const normalizeSaleName = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const isNameMatch = (saleName, keyword) => {
+  const normalized = normalizeSaleName(saleName);
+  const normalizedKeyword = normalizeSaleName(keyword);
+  if (normalized === normalizedKeyword) return true;
+  if (normalized.includes(normalizedKeyword)) return true;
+  if (normalizedKeyword.includes(normalized)) return true;
+  return false;
+};
+
+const findBestNextMarketMatch = async (items, keyword) => {
+  if (!items || items.length === 0) return null;
+
+  items.sort((a, b) => a.cryptoPriceInfo.price - b.cryptoPriceInfo.price);
+
+  const matches = items.filter((sale) => isNameMatch(sale.item.name, keyword));
+
+  if (matches.length === 0) return null;
+
+  const best = matches[0];
+
+  let fiatPrice = best.fiatPriceInfo.price;
+  let fiatCurrency = best.fiatPriceInfo.currencyType;
+
+  try {
+    const estimateUrl = `${NEXT_MARKET_API_BASE}/v1/sale/c2c/${best.id}/price/estimate`;
+    const params = new URLSearchParams({
+      price: String(best.cryptoPriceInfo.price),
+      fromCurrencyType: 'USDT',
+      toCurrencyType: 'PHP',
+    });
+    const estimateResponse = await fetch(`${estimateUrl}?${params}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (estimateResponse.ok) {
+      const estimate = await estimateResponse.json();
+      if (estimate?.toSettlementPrice?.currencyType === 'PHP') {
+        fiatPrice = estimate.toSettlementPrice.totalPrice;
+        fiatCurrency = 'PHP';
+      }
+    }
+  } catch {
+    // fallback to original fiatPrice/fiatCurrency from API
+  }
+
+  return {
+    matchedSaleName: best.item.name,
+    saleId: best.id,
+    usdPrice: best.cryptoPriceInfo.price,
+    usdtPrice: best.cryptoPriceInfo.price,
+    fiatPrice,
+    fiatCurrency,
+    quantity: best.displayAmount,
+    isExactMatch: true,
+  };
+};
+
+const fetchNextMarketPage = async (page, keyword, presetId, subPresetId, refPresetId) => {
+  const presetIdList = [];
+  const primaryId = subPresetId ?? presetId;
+  if (primaryId != null) presetIdList.push(primaryId);
+  if (refPresetId != null) presetIdList.push(refPresetId);
+
+  const body = {
+    sort: 'PRICE_ASC',
+    viewType: 'fiat',
+    keyword,
+    realmCode: 'OLD_REALM',
+  };
+
+  if (presetIdList.length > 0) body.presetIdList = presetIdList;
+
+  const upstreamResponse = await fetch(`${MARKETPLACE_C2C_ENDPOINT}?page=${page}&realmCode=OLD_REALM`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!upstreamResponse.ok) {
+    const text = await upstreamResponse.text();
+    throw new Error(`NEXT Market API returned ${upstreamResponse.status}: ${text}`);
+  }
+
+  return upstreamResponse.json();
+};
+
+exports.fetchNextMarketPrices = onRequest(
+  {
+    region: REGION,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    cors: false,
+  },
+  async (request, response) => {
+    setCorsHeaders(request, response, ['GET', 'OPTIONS']);
+
+    if (!requireMethod(request, response, 'GET')) {
+      return;
+    }
+
+    const searchUrl = typeof request.query.searchUrl === 'string' ? request.query.searchUrl.trim() : '';
+    let keyword, presetId, subPresetId, refPresetId;
+
+    if (searchUrl) {
+      try {
+        const parsed = new URL(searchUrl);
+        keyword = parsed.searchParams.get('keyword') || '';
+        presetId = parsed.searchParams.get('presetId') ? Number(parsed.searchParams.get('presetId')) : null;
+        subPresetId = parsed.searchParams.get('subPresetId') ? Number(parsed.searchParams.get('subPresetId')) : null;
+        refPresetId = parsed.searchParams.get('refPresetId') ? Number(parsed.searchParams.get('refPresetId')) : null;
+      } catch {
+        sendError(response, 400, 'Invalid search URL.');
+        return;
+      }
+    } else {
+      keyword = typeof request.query.keyword === 'string' ? request.query.keyword.trim() : '';
+      presetId = request.query.presetId ? Number(request.query.presetId) : null;
+      subPresetId = request.query.subPresetId ? Number(request.query.subPresetId) : null;
+      refPresetId = request.query.refPresetId ? Number(request.query.refPresetId) : null;
+    }
+
+    if (!keyword) {
+      sendError(response, 400, 'Query parameter "keyword" is required.');
+      return;
+    }
+
+    try {
+      let searchKeyword = keyword;
+      let result = null;
+
+      try {
+        const suggestionUrl = `${MARKETPLACE_KEYWORD_SUGGESTION_ENDPOINT}?keyword=${encodeURIComponent(keyword)}&realmCode=OLD_REALM`;
+        const suggestionResponse = await fetch(suggestionUrl, {
+          headers: { Accept: 'application/json' },
+        });
+        if (suggestionResponse.ok) {
+          const suggestions = await suggestionResponse.json();
+          if (Array.isArray(suggestions) && suggestions.length > 0) {
+            searchKeyword = suggestions[0];
+          }
+        }
+      } catch {
+        logger.warn('Suggestion API failed, using original keyword', { keyword });
+      }
+
+      const searchAttempts = [
+        { label: 'full presets', presetId, subPresetId, refPresetId },
+        { label: 'without subPresetId', presetId, subPresetId: null, refPresetId },
+        { label: 'without presets', presetId: null, subPresetId: null, refPresetId: null },
+      ];
+
+      const MAX_PAGES = MAX_C2C_PAGES;
+
+      for (const attempt of searchAttempts) {
+        let page = 0;
+        const attemptItems = [];
+
+        for (; page < MAX_PAGES; page++) {
+          const payload = await fetchNextMarketPage(page, searchKeyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
+          const content = payload.content || [];
+
+          attemptItems.push(...content);
+
+          if (payload.last || content.length === 0) break;
+        }
+
+        const match = await findBestNextMarketMatch(attemptItems, searchKeyword);
+        if (match) {
+          result = match;
+          break;
+        }
+      }
+
+      if (!result && searchKeyword !== keyword) {
+        for (const attempt of searchAttempts) {
+          let page = 0;
+          const attemptItems = [];
+
+          for (; page < MAX_PAGES; page++) {
+            const payload = await fetchNextMarketPage(page, keyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
+            const content = payload.content || [];
+            attemptItems.push(...content);
+            if (payload.last || content.length === 0) break;
+          }
+
+          const match = await findBestNextMarketMatch(attemptItems, keyword);
+          if (match) {
+            result = match;
+            break;
+          }
+        }
+      }
+
+      response.status(200).json(result);
+    } catch (error) {
+      logger.error('Failed to fetch NEXT Market prices', {
+        keyword,
+        presetId,
+        subPresetId,
+        refPresetId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      sendError(response, 502, 'Failed to fetch prices from NEXT Market.');
+    }
+  }
+);

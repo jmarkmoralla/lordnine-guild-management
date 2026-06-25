@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader, Package2, Pencil, Plus, Search, ShoppingBag, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Loader, Package2, Pencil, Plus, RefreshCw, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useFirestoreMarketplaceItems } from '../hooks/useFirestoreMarketplaceItems';
-import { useFirestoreMarketplacePricing } from '../hooks/useFirestoreMarketplacePricing';
+
 import {
-  getDiscountedMarketplacePriceDisplay,
   getDefaultMarketplacePart,
   formatMarketplaceCategory,
   getMarketplaceImageUrl,
@@ -21,23 +20,152 @@ import {
   type MarketplaceRarity,
   type MarketplaceSubcategory,
 } from '../types/marketplace';
+import { MarketPriceInfo } from './MarketPriceInfo';
 import '../styles/Dashboard.css';
 import '../styles/Rankings.css';
 import '../styles/Marketplace.css';
 
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const getItemNameSubcategoryLabel = (
+  category: MarketplaceCategory,
+  subcategory: MarketplaceSubcategory,
+): string => {
+  const map: Record<string, Record<string, string>> = {
+    clothArmor: {
+      helm: 'Hat',
+      upperArmor: 'Robe',
+      lowerArmor: 'Cloth Pants',
+      gloves: 'Gloves',
+      boots: 'Loafers',
+    },
+    leatherArmor: {
+      helm: 'Hood',
+      upperArmor: 'Vest',
+      lowerArmor: 'Leather Pants',
+      gloves: 'Wristband',
+      boots: 'High Boots',
+    },
+    plateArmor: {
+      helm: 'Helm',
+      upperArmor: 'Armor',
+      lowerArmor: 'Gaiters',
+      gloves: 'Gauntlets',
+      boots: 'Greaves',
+    },
+  };
+  return map[category]?.[subcategory] ?? formatMarketplaceSubcategory(subcategory);
+};
 
-const phpFormatter = new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency: 'PHP',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const ABILITY_OPTIONS = [
+  { id: 'magneticField', label: 'Magnetic Field', type: 'Spell' },
+  { id: 'deathblow', label: 'Deathblow', type: 'Enhance' },
+  { id: 'supersense', label: 'Supersense', type: 'Recon' },
+  { id: 'disarm', label: 'Disarm', type: 'Combat' },
+  { id: 'overcome', label: 'Overcome', type: 'Vitality' },
+  { id: 'continuedHeal', label: 'Continued Heal', type: 'Support' },
+  { id: 'createZone', label: 'Create Zone', type: 'Defense' },
+  { id: 'nearEscape', label: 'Near Escape', type: 'Trick' },
+  { id: 'warCry', label: 'War Cry', type: 'Vitality' },
+  { id: 'gamble', label: 'Gamble', type: 'Support' },
+  { id: 'reverseTime', label: 'Reverse Time', type: 'Trick' },
+  { id: 'continuousCuring', label: 'Continuous Curing', type: 'Support' },
+  { id: 'anatomy', label: 'Anatomy', type: 'Support' },
+  { id: 'purify', label: 'Purify', type: 'Trick' },
+  { id: 'lightningSpirit', label: 'Lightning Spirit', type: 'Enhance' },
+] as const;
+
+const SKILLBOOK_EPIC_NAMES: Record<string, string> = {
+  bareHands: 'Bare Hands: Martial Arts Training',
+  swordAndShield: 'Sword and Shield: Battlefield Trailblazer',
+  battleStaff: 'Battle Staff: Master of Magic Martial Arts',
+  battleShield: 'Battle Shield: Protector of Light',
+  greatsword: 'Greatsword: Berserker\'s Pride',
+  staff: 'Staff: Element Awakening',
+  dualDaggers: 'Dual Daggers: Reorganize',
+  bow: 'Bow: Perfect Sniper',
+  crossbow: 'Crossbow: Hunter\'s Mark',
+};
+
+const MOUNTS_LEGENDARY_OPTIONS = [
+  { id: 'petrolov', label: 'Petrolov' },
+  { id: 'lamphon', label: 'Lamphon' },
+  { id: 'labartonis', label: 'Labartonis' },
+  { id: 'baphon', label: 'Baphon' },
+  { id: 'rhodi', label: 'Rhodi' },
+  { id: 'vulcanos', label: 'Vulcanos' },
+] as const;
+
+const MOUNTS_MYTHIC_OPTIONS = [
+  { id: 'undemic', label: 'Undemic' },
+  { id: 'glasis', label: 'Glasis' },
+  { id: 'jupiter', label: 'Jupiter' },
+  { id: 'reptilis', label: 'Reptilis' },
+  { id: 'delphon', label: 'Delphon' },
+  { id: 'cartenonis', label: 'Cartenonis' },
+  { id: 'somnium', label: 'Somnium' },
+  { id: 'rabeth', label: 'Rabeth' },
+] as const;
+
+const SKILLBOOK_LEGENDARY_NAMES: Record<string, string> = {
+  bareHands: 'Bare Hands: Relentless Blow',
+  swordAndShield: 'Sword and Shield: Indomitable Confidence',
+  battleStaff: 'Battle Staff: Binding Judgement',
+  battleShield: 'Battle Shield: Unbreakable Strength',
+  greatsword: 'Greatsword: Merciless',
+  staff: 'Staff: Unknown Magic',
+  dualDaggers: 'Dual Daggers: Cruel Edge',
+  bow: 'Bow: Pinnacle of Sniping',
+  crossbow: 'Crossbow: Flow of Battle',
+};
+
+const generateItemName = (
+  category: MarketplaceCategory,
+  subcategory: MarketplaceSubcategory,
+  part: MarketplacePart | null,
+  isAppraised: boolean,
+  rarity: MarketplaceRarity,
+  abilityOption: string | null,
+  mountsOption: string | null,
+): string => {
+  if (category === 'consumables' && subcategory === 'ability' && abilityOption) {
+    const option = ABILITY_OPTIONS.find(o => o.id === abilityOption);
+    if (option) return `Ability: ${option.label} [${option.type}]`;
+  }
+
+  if (category === 'consumables' && subcategory === 'mounts' && mountsOption) {
+    const allMounts = [...MOUNTS_LEGENDARY_OPTIONS, ...MOUNTS_MYTHIC_OPTIONS];
+    const option = allMounts.find(o => o.id === mountsOption);
+    if (option) return `${option.label} Saddle`;
+  }
+
+  if (category === 'consumables' && subcategory === 'skillbook' && part) {
+    if (rarity === 'epic') {
+      const name = SKILLBOOK_EPIC_NAMES[part];
+      if (name) return name;
+    }
+    if (rarity === 'legendary') {
+      const name = SKILLBOOK_LEGENDARY_NAMES[part];
+      if (name) return name;
+    }
+  }
+
+  if (category === 'consumables') {
+    if (part) {
+      const option = part === 'azzam' ? 'Azzam Hissan' : formatMarketplacePart(part);
+      return `${option} ${formatMarketplaceSubcategory(subcategory)}`;
+    }
+    return `${formatMarketplaceSubcategory(subcategory)} (${formatMarketplaceRarity(rarity)})`;
+  }
+
+  if (category === 'accessories') {
+    const option = part === 'azzam' ? 'Azzam Hissan' : (part ? formatMarketplacePart(part) : '');
+    return `${option} ${getItemNameSubcategoryLabel(category, subcategory)}`;
+  }
+
+  const option = part === 'azzam' ? 'Azzam Hissan' : (part ? formatMarketplacePart(part) : '');
+  const subcategoryLabel = getItemNameSubcategoryLabel(category, subcategory);
+  const statusLabel = isAppraised ? 'Appraise' : 'Not Appraised';
+  return `${option} ${subcategoryLabel} (${statusLabel})`;
+};
 
 interface ManageMarketplacePageProps {
   userType: 'guest' | 'admin';
@@ -51,9 +179,12 @@ interface MarketplaceFormState {
   subcategory: MarketplaceSubcategory;
   part: MarketplacePart | null;
   qty: number;
+  rarity: MarketplaceRarity;
   priceUsd: number;
   pricePhp: number;
-  rarity: MarketplaceRarity;
+  isAppraised: boolean;
+  abilityOption: string | null;
+  mountsOption: string | null;
 }
 
 const defaultFormState = (): MarketplaceFormState => ({
@@ -67,14 +198,17 @@ const defaultFormState = (): MarketplaceFormState => ({
   priceUsd: 0,
   pricePhp: 0,
   rarity: 'epic',
+  isAppraised: false,
+  abilityOption: null,
+  mountsOption: null,
 });
 
 const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType }) => {
   const { items, loading, error, addItem, updateItem, deleteItem } = useFirestoreMarketplaceItems();
-  const { pricingSettings } = useFirestoreMarketplacePricing();
   const [searchQuery, setSearchQuery] = useState('');
   const [rarityFilter, setRarityFilter] = useState<'all' | MarketplaceRarity>('all');
   const [showItemModal, setShowItemModal] = useState(false);
+  const [priceRefreshCounter, setPriceRefreshCounter] = useState(0);
   const [editingItem, setEditingItem] = useState<MarketplaceItem | null>(null);
   const [formState, setFormState] = useState<MarketplaceFormState>(defaultFormState());
   const [failedThumbnailImages, setFailedThumbnailImages] = useState<Record<string, boolean>>({});
@@ -96,6 +230,13 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
   const subcategoryOptions = getMarketplaceSubcategoryOptions(formState.category);
   const partOptions = getMarketplacePartOptions(formState.category, formState.subcategory, formState.rarity);
   const showsPartOptions = partOptions.length > 0;
+  const isAbilitySubcategory = formState.category === 'consumables' && formState.subcategory === 'ability';
+  const isSkillbookSubcategory = formState.category === 'consumables' && formState.subcategory === 'skillbook';
+  const isMountsSubcategory = formState.category === 'consumables' && formState.subcategory === 'mounts';
+  const mountsOptionsList = isMountsSubcategory && formState.rarity === 'legendary' ? MOUNTS_LEGENDARY_OPTIONS
+    : isMountsSubcategory && formState.rarity === 'mythic' ? MOUNTS_MYTHIC_OPTIONS : [];
+  const hasMountsOptions = mountsOptionsList.length > 0;
+  const hasAbilityOptions = isAbilitySubcategory && ABILITY_OPTIONS.length > 0;
   const derivedImageUrl = getMarketplaceImageUrl(
     formState.category,
     formState.subcategory,
@@ -108,32 +249,53 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
     setPreviewImageFailed(false);
   }, [previewImageUrl, showItemModal]);
 
+  useEffect(() => {
+    setFormState((current) => ({
+      ...current,
+      name: generateItemName(current.category, current.subcategory, current.part, current.isAppraised, current.rarity, current.abilityOption, current.mountsOption),
+    }));
+  }, [formState.category, formState.subcategory, formState.part, formState.isAppraised, formState.rarity, formState.abilityOption, formState.mountsOption]);
+
   const handleCategorySelect = (category: MarketplaceCategory) => {
     const nextSubcategory = getDefaultMarketplaceSubcategory(category);
-    const nextPart = getDefaultMarketplacePart(category, nextSubcategory, formState.rarity);
+    const isAbility = category === 'consumables' && nextSubcategory === 'ability';
+    const rarity = isAbility ? 'legendary' : formState.rarity;
+    const nextPart = getDefaultMarketplacePart(category, nextSubcategory, rarity);
 
     setFormState((current) => ({
       ...current,
       category,
       subcategory: nextSubcategory,
+      rarity,
       part: nextPart,
-      imageUrl: getMarketplaceImageUrl(category, nextSubcategory, nextPart, current.rarity),
+      abilityOption: isAbility ? ABILITY_OPTIONS[0].id : null,
+      imageUrl: getMarketplaceImageUrl(category, nextSubcategory, nextPart, rarity),
     }));
   };
 
   const handleSubcategorySelect = (subcategory: MarketplaceSubcategory) => {
     setFormState((current) => {
-      const nextPart = getDefaultMarketplacePart(current.category, subcategory, current.rarity);
+      const isAbility = current.category === 'consumables' && subcategory === 'ability';
+      const isSkillbook = current.category === 'consumables' && subcategory === 'skillbook';
+      const isMounts = current.category === 'consumables' && subcategory === 'mounts';
+      const rarity = isAbility ? 'legendary'
+        : isSkillbook && current.rarity === 'mythic' ? 'epic'
+        : isMounts && current.rarity === 'epic' ? 'legendary'
+        : current.rarity;
+      const nextPart = getDefaultMarketplacePart(current.category, subcategory, rarity);
 
       return {
         ...current,
         subcategory,
+        rarity,
         part: nextPart,
+        abilityOption: isAbility ? ABILITY_OPTIONS[0].id : null,
+        mountsOption: isMounts ? MOUNTS_LEGENDARY_OPTIONS[0].id : null,
         imageUrl: getMarketplaceImageUrl(
           current.category,
           subcategory,
           nextPart,
-          current.rarity,
+          rarity,
         ),
       };
     });
@@ -141,12 +303,20 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
 
   const handleRaritySelect = (rarity: MarketplaceRarity) => {
     setFormState((current) => {
+      const isMounts = current.category === 'consumables' && current.subcategory === 'mounts';
       const nextPart = getDefaultMarketplacePart(current.category, current.subcategory, rarity);
+      const currentOption = current.mountsOption;
+      const isValidMountsOption = isMounts && currentOption && [...MOUNTS_LEGENDARY_OPTIONS, ...MOUNTS_MYTHIC_OPTIONS].some(o => o.id === currentOption);
 
       return {
         ...current,
         rarity,
         part: nextPart,
+        mountsOption: isMounts && rarity === 'legendary'
+          ? (isValidMountsOption && MOUNTS_LEGENDARY_OPTIONS.some(o => o.id === currentOption) ? currentOption : MOUNTS_LEGENDARY_OPTIONS[0].id)
+          : isMounts && rarity === 'mythic'
+          ? (isValidMountsOption && MOUNTS_MYTHIC_OPTIONS.some(o => o.id === currentOption) ? currentOption : MOUNTS_MYTHIC_OPTIONS[0].id)
+          : current.mountsOption,
         imageUrl: getMarketplaceImageUrl(current.category, current.subcategory, nextPart, rarity),
       };
     });
@@ -154,7 +324,8 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
 
   const openCreateModal = () => {
     setEditingItem(null);
-    setFormState(defaultFormState());
+    const defaults = defaultFormState();
+    setFormState({ ...defaults, name: generateItemName(defaults.category, defaults.subcategory, defaults.part, defaults.isAppraised, defaults.rarity, null, null) });
     setShowItemModal(true);
   };
 
@@ -171,6 +342,9 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
       priceUsd: item.priceUsd,
       pricePhp: item.pricePhp,
       rarity: item.rarity,
+      isAppraised: item.isAppraised,
+      abilityOption: null,
+      mountsOption: null,
     });
     setShowItemModal(true);
   };
@@ -189,6 +363,7 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
       imageUrl: derivedImageUrl,
       qty: 1,
       isVisible: editingItem?.isVisible ?? true,
+      isAppraised: formState.isAppraised,
     };
 
     try {
@@ -332,6 +507,16 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
           <Plus size={16} strokeWidth={1.8} />
           Add Item
         </button>
+
+        <button
+          type="button"
+          className="refresh-btn-filter icon-only"
+          onClick={() => setPriceRefreshCounter((c) => c + 1)}
+          aria-label="Refresh NEXT Market prices"
+          title="Refresh NEXT Market prices"
+        >
+          <RefreshCw size={16} strokeWidth={1.8} />
+        </button>
       </div>
 
       {loading && (
@@ -358,15 +543,15 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
           <div className="marketplace-list-header manage-marketplace-header" aria-hidden="true">
             <span className="marketplace-col-name">Item name</span>
             <span className="marketplace-col-qty">Quantity</span>
-            <span className="marketplace-col-price">NEXT Market Price<br />(USD/PHP)</span>
-            <span className="marketplace-col-price">Discounted Price<br />(USD/PHP)</span>
-            <span className="marketplace-col-rarity">Status</span>
+            <span className="marketplace-col-sale-price">Sale Price</span>
+            <span className="marketplace-col-converted-price">Converted Price</span>
+            <span className="marketplace-col-discounted-price">Discounted Price</span>
+            <span className="marketplace-col-next-market">Next Market</span>
             <span className="marketplace-col-actions">Actions</span>
           </div>
 
           <div className="marketplace-list-body">
             {filteredItems.map((item) => {
-              const discountedPrice = getDiscountedMarketplacePriceDisplay(item, pricingSettings);
               const thumbnailImageKey = `${item.id ?? item.name}:${item.imageUrl}`;
               const showThumbnailImage = item.imageUrl.trim().length > 0 && !failedThumbnailImages[thumbnailImageKey];
 
@@ -406,36 +591,14 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
                   <strong>{item.qty.toLocaleString()}</strong>
                 </div>
 
-                <div className="marketplace-cell marketplace-col-price marketplace-price-cell">
-                  <span className="marketplace-cell-label">NEXT Market Price (USD/PHP)</span>
-                  <strong>{usdFormatter.format(item.priceUsd)}</strong>
-                  <strong>{phpFormatter.format(item.pricePhp)}</strong>
-                </div>
-
-                <div className="marketplace-cell marketplace-col-price marketplace-price-cell">
-                  <span className="marketplace-cell-label">Discounted Price (USD/PHP)</span>
-                  <strong>{discountedPrice.usdDisplay}</strong>
-                  <strong>{discountedPrice.phpDisplay}</strong>
-                </div>
-
-                <div className="marketplace-cell marketplace-col-rarity">
-                  <span className="marketplace-cell-label">Status</span>
-                  <div className="manage-marketplace-status-group">
-                    <span className={`marketplace-rarity-badge rarity-badge-${item.rarity}`}>
-                      {formatMarketplaceRarity(item.rarity)}
-                    </span>
-                    <span className={`marketplace-visibility-badge ${item.isVisible ? 'visible' : 'hidden'}`}>
-                      {item.isVisible ? 'Visible' : 'Hidden'}
-                    </span>
-                  </div>
-                </div>
+                <MarketPriceInfo item={item} refreshCounter={priceRefreshCounter} />
 
                 <div className="marketplace-cell marketplace-col-actions marketplace-action-cell">
                   <span className="marketplace-cell-label">Actions</span>
                   <div className="marketplace-row-actions">
                     <button
                       type="button"
-                      className="marketplace-icon-button"
+                      className={`marketplace-icon-button ${item.isVisible ? 'visible' : 'hidden'}`}
                       onClick={() => handleToggleVisibility(item)}
                       aria-label={item.isVisible ? `Hide ${item.name}` : `Show ${item.name}`}
                       title={item.isVisible ? 'Hide from public marketplace' : 'Show on public marketplace'}
@@ -480,7 +643,6 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
             <div className="marketplace-modal-header modal-header marketplace-editor-header">
               <div className="marketplace-editor-heading">
                 <h3>{editingItem ? 'Edit Marketplace Item' : 'Add Marketplace Item'}</h3>
-                <p>Shape how this listing appears in the public marketplace.</p>
               </div>
               <button type="button" className="marketplace-icon-button marketplace-modal-close modal-close" onClick={closeItemModal} aria-label="Close item modal">
                 <X size={16} strokeWidth={1.8} />
@@ -557,7 +719,7 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
                   <h4 className="marketplace-editor-label">Rarity</h4>
                 </div>
                 <div className="marketplace-category-pill-list" role="radiogroup" aria-label="Marketplace rarities">
-                  {MARKETPLACE_RARITY_OPTIONS.map((rarity) => (
+                  {(isAbilitySubcategory ? ['legendary'] as const : isSkillbookSubcategory ? ['epic', 'legendary'] as const : isMountsSubcategory ? ['legendary', 'mythic'] as const : MARKETPLACE_RARITY_OPTIONS).map((rarity) => (
                     <button
                       key={rarity}
                       type="button"
@@ -596,6 +758,48 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
                 </section>
               )}
 
+              {hasAbilityOptions && (
+                <section className="marketplace-editor-category-section" aria-label="Marketplace ability options">
+                  <div className="marketplace-editor-category-heading">
+                    <h4 className="marketplace-editor-label">Options</h4>
+                  </div>
+                  <div className="marketplace-category-pill-list" role="radiogroup" aria-label="Marketplace ability options">
+                    {ABILITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`marketplace-category-pill ${formState.abilityOption === option.id ? 'active' : ''}`}
+                        onClick={() => setFormState((current) => ({ ...current, abilityOption: option.id }))}
+                        aria-pressed={formState.abilityOption === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {hasMountsOptions && (
+                <section className="marketplace-editor-category-section" aria-label="Marketplace mounts options">
+                  <div className="marketplace-editor-category-heading">
+                    <h4 className="marketplace-editor-label">Options</h4>
+                  </div>
+                  <div className="marketplace-category-pill-list" role="radiogroup" aria-label="Marketplace mounts options">
+                    {mountsOptionsList.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`marketplace-category-pill ${formState.mountsOption === option.id ? 'active' : ''}`}
+                        onClick={() => setFormState((current) => ({ ...current, mountsOption: option.id }))}
+                        aria-pressed={formState.mountsOption === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <div className="marketplace-form">
                 <div className="form-group marketplace-form-full">
                   <label className="marketplace-editor-label" htmlFor="marketplace-item-name">Item Name</label>
@@ -603,56 +807,43 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
                     id="marketplace-item-name"
                     type="text"
                     value={formState.name}
-                    onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))}
+                    disabled
                     placeholder="Sword and Shield: Defense Training"
                     required
                   />
                 </div>
 
+                {formState.category !== 'accessories' && formState.category !== 'consumables' && (
+                  <>
                 <div className="form-group marketplace-form-full">
                   <label className="marketplace-editor-label" htmlFor="marketplace-item-description">Description</label>
                   <textarea
                     id="marketplace-item-description"
                     value={formState.description}
+                    disabled={!formState.isAppraised}
                     onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))}
                     rows={3}
                     placeholder="Melee Defense 91 · Ranged Defense 100 · Magic Defense 163"
                   />
                 </div>
-
-                <div className="form-group">
-                  <label className="marketplace-editor-label" htmlFor="marketplace-item-usd">NEXT Market Price (USD)</label>
-                  <div className="attendance-guest-search-box marketplace-price-input-shell" role="group" aria-label="NEXT Market Price in USD">
-                    <span className="attendance-guest-search-icon marketplace-price-input-symbol" aria-hidden="true">$</span>
-                    <input
-                      id="marketplace-item-usd"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className="attendance-guest-search-input marketplace-price-input"
-                      value={formState.priceUsd}
-                      onChange={(event) => setFormState((current) => ({ ...current, priceUsd: Number(event.target.value) }))}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="marketplace-editor-label" htmlFor="marketplace-item-php">NEXT Market Price (PHP)</label>
-                  <div className="attendance-guest-search-box marketplace-price-input-shell" role="group" aria-label="NEXT Market Price in PHP">
-                    <span className="attendance-guest-search-icon marketplace-price-input-symbol" aria-hidden="true">₱</span>
-                    <input
-                      id="marketplace-item-php"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className="attendance-guest-search-input marketplace-price-input"
-                      value={formState.pricePhp}
-                      onChange={(event) => setFormState((current) => ({ ...current, pricePhp: Number(event.target.value) }))}
-                      required
-                    />
-                  </div>
-                </div>
+                    <label className="marketplace-checkbox-field" style={{ flex: 1, width: 'auto' }}>
+                      <input
+                        type="checkbox"
+                        checked={!formState.isAppraised}
+                        onChange={() => setFormState((current) => ({ ...current, isAppraised: false }))}
+                      />
+                      <span>Not Appraised</span>
+                    </label>
+                    <label className="marketplace-checkbox-field" style={{ flex: 1, width: 'auto' }}>
+                      <input
+                        type="checkbox"
+                        checked={formState.isAppraised}
+                        onChange={() => setFormState((current) => ({ ...current, isAppraised: true }))}
+                      />
+                      <span>Appraise</span>
+                    </label>
+                  </>
+                )}
 
               </div>
             </div>

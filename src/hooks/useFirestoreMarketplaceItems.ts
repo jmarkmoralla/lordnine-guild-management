@@ -48,6 +48,7 @@ const normalizeMarketplaceItem = (id: string, rawData: LegacyMarketplaceItemData
     pricePhp: Number.isFinite(Number(rawData.pricePhp)) ? Number(rawData.pricePhp) : 0,
     rarity: normalizeMarketplaceRarity(rawData.rarity),
     isVisible: rawData.isVisible !== false,
+    isAppraised: rawData.isAppraised === true,
     createdAt: typeof rawData.createdAt === 'string'
       ? rawData.createdAt
       : typeof rawData.updatedAt === 'string'
@@ -87,6 +88,7 @@ const createItemPayload = (item: LegacyMarketplaceItemData) => {
     pricePhp: Number(item.pricePhp ?? 0),
     rarity,
     isVisible: item.isVisible !== false,
+    isAppraised: item.isAppraised === true,
     createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

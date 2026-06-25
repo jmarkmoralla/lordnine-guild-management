@@ -1,70 +1,24 @@
 import { useMemo, useState } from 'react';
-import { BadgePercent, Gem, Loader, Search, ShoppingBag, X } from 'lucide-react';
+import { Loader, Search, ShoppingBag, X } from 'lucide-react';
 import { useFirestoreMarketplaceItems } from '../hooks/useFirestoreMarketplaceItems';
-import { useFirestoreMarketplacePricing } from '../hooks/useFirestoreMarketplacePricing';
 import {
   formatMarketplaceRarity,
-  getDiscountedMarketplacePriceDisplay,
-  getDiscountedMarketplacePriceValues,
   MARKETPLACE_RARITY_OPTIONS,
   type MarketplaceRarity,
 } from '../types/marketplace';
+import { MarketPriceInfo } from './MarketPriceInfo';
 import '../styles/Dashboard.css';
 import '../styles/Rankings.css';
 import '../styles/Marketplace.css';
 
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const phpFormatter = new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency: 'PHP',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 const MarketplacePage: React.FC = () => {
   const { items, loading, error } = useFirestoreMarketplaceItems();
-  const { pricingSettings } = useFirestoreMarketplacePricing();
   const [searchQuery, setSearchQuery] = useState('');
   const [rarityFilter, setRarityFilter] = useState<'all' | MarketplaceRarity>('all');
   const [failedThumbnailImages, setFailedThumbnailImages] = useState<Record<string, boolean>>({});
+  const [priceRefreshCounter] = useState(0);
 
   const publicItems = useMemo(() => items.filter((item) => item.isVisible), [items]);
-
-  const rareListingsCount = useMemo(
-    () => publicItems.filter((item) => item.rarity === 'legendary' || item.rarity === 'mythic').length,
-    [publicItems]
-  );
-
-  const bestDeal = useMemo(() => {
-    if (publicItems.length === 0) {
-      return null;
-    }
-
-    return publicItems.reduce((bestItem, currentItem) => {
-      const currentSavingsPhp = Math.max(
-        currentItem.pricePhp - getDiscountedMarketplacePriceValues(currentItem, pricingSettings).php,
-        0,
-      );
-
-      if (!bestItem) {
-        return currentSavingsPhp > 0
-          ? { item: currentItem, savingsPhp: currentSavingsPhp }
-          : null;
-      }
-
-      if (currentSavingsPhp > bestItem.savingsPhp) {
-        return { item: currentItem, savingsPhp: currentSavingsPhp };
-      }
-
-      return bestItem;
-    }, null as { item: (typeof publicItems)[number]; savingsPhp: number } | null);
-  }, [pricingSettings, publicItems]);
 
   const filteredItems = useMemo(() => publicItems.filter((item) => {
     const matchesSearch = [item.name, item.description]
@@ -80,43 +34,6 @@ const MarketplacePage: React.FC = () => {
       <div className="page-header">
         <h2>Marketplace</h2>
         <p className="page-subtitle">Browse listed items available to all guild and faction members.</p>
-      </div>
-
-      <div className="members-stats-grid marketplace-stats-grid">
-        <div className="members-stat-card marketplace-stat-card">
-          <div className="members-stat-icon" aria-hidden="true">
-            <ShoppingBag size={24} strokeWidth={1.75} />
-          </div>
-          <div className="members-stat-content">
-            <h3>Listings</h3>
-            <p className="members-stat-value">{publicItems.length}</p>
-            <p className="marketplace-stat-subtitle">All public items currently available</p>
-          </div>
-        </div>
-        <div className="members-stat-card marketplace-stat-card marketplace-stat-card-success">
-          <div className="members-stat-icon" aria-hidden="true">
-            <BadgePercent size={24} strokeWidth={1.75} />
-          </div>
-          <div className="members-stat-content">
-            <h3>Best Deal</h3>
-            <p className={`members-stat-value marketplace-stat-value-text marketplace-stat-value-compact ${bestDeal ? `rarity-text-${bestDeal.item.rarity}` : ''}`}>
-              {bestDeal?.item.name ?? 'None yet'}
-            </p>
-            <p className="marketplace-stat-subtitle">
-              {bestDeal ? `Save ${phpFormatter.format(bestDeal.savingsPhp)}` : 'Biggest current discount on the board'}
-            </p>
-          </div>
-        </div>
-        <div className="members-stat-card marketplace-stat-card marketplace-stat-card-muted">
-          <div className="members-stat-icon" aria-hidden="true">
-            <Gem size={24} strokeWidth={1.75} />
-          </div>
-          <div className="members-stat-content">
-            <h3>Rare Listings</h3>
-            <p className="members-stat-value">{rareListingsCount}</p>
-            <p className="marketplace-stat-subtitle">Legendary and Mythic items available now</p>
-          </div>
-        </div>
       </div>
 
       <div className="rankings-filters marketplace-toolbar">
@@ -155,6 +72,7 @@ const MarketplacePage: React.FC = () => {
             <option key={rarity} value={rarity}>{formatMarketplaceRarity(rarity)}</option>
           ))}
         </select>
+
       </div>
 
       {loading && (
@@ -181,14 +99,14 @@ const MarketplacePage: React.FC = () => {
           <div className="marketplace-list-header" aria-hidden="true">
             <span className="marketplace-col-name">Item name</span>
             <span className="marketplace-col-qty">Quantity</span>
-            <span className="marketplace-col-price">NEXT Market Price<br />(USD/PHP)</span>
-            <span className="marketplace-col-price">Discounted Price<br />(USD/PHP)</span>
-            <span className="marketplace-col-rarity">Rarity</span>
+            <span className="marketplace-col-sale-price">Sale Price</span>
+            <span className="marketplace-col-converted-price">Converted Price</span>
+            <span className="marketplace-col-discounted-price">Discounted Price</span>
+            <span className="marketplace-col-next-market">Next Market</span>
           </div>
 
           <div className="marketplace-list-body">
             {filteredItems.map((item) => {
-              const discountedPrice = getDiscountedMarketplacePriceDisplay(item, pricingSettings);
               const thumbnailImageKey = `${item.id ?? item.name}:${item.imageUrl}`;
               const showThumbnailImage = item.imageUrl.trim().length > 0 && !failedThumbnailImages[thumbnailImageKey];
 
@@ -228,24 +146,7 @@ const MarketplacePage: React.FC = () => {
                   <strong>{item.qty.toLocaleString()}</strong>
                 </div>
 
-                <div className="marketplace-cell marketplace-col-price marketplace-price-cell">
-                  <span className="marketplace-cell-label">NEXT Market Price (USD/PHP)</span>
-                  <strong>{usdFormatter.format(item.priceUsd)}</strong>
-                  <strong>{phpFormatter.format(item.pricePhp)}</strong>
-                </div>
-
-                <div className="marketplace-cell marketplace-col-price marketplace-price-cell">
-                  <span className="marketplace-cell-label">Discounted Price (USD/PHP)</span>
-                  <strong>{discountedPrice.usdDisplay}</strong>
-                  <strong>{discountedPrice.phpDisplay}</strong>
-                </div>
-
-                <div className="marketplace-cell marketplace-col-rarity">
-                  <span className="marketplace-cell-label">Rarity</span>
-                  <span className={`marketplace-rarity-badge rarity-badge-${item.rarity}`}>
-                    {formatMarketplaceRarity(item.rarity)}
-                  </span>
-                </div>
+                <MarketPriceInfo item={item} refreshCounter={priceRefreshCounter} />
               </article>
             );})}
           </div>
