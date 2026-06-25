@@ -180,6 +180,8 @@ interface MarketplaceFormState {
   part: MarketplacePart | null;
   qty: number;
   rarity: MarketplaceRarity;
+  priceUsd: number;
+  pricePhp: number;
   isAppraised: boolean;
   abilityOption: string | null;
   mountsOption: string | null;
@@ -717,7 +719,7 @@ const ManageMarketplacePage: React.FC<ManageMarketplacePageProps> = ({ userType 
                   <h4 className="marketplace-editor-label">Rarity</h4>
                 </div>
                 <div className="marketplace-category-pill-list" role="radiogroup" aria-label="Marketplace rarities">
-                  {(isAbilitySubcategory ? ['legendary'] : isSkillbookSubcategory ? ['epic', 'legendary'] : isMountsSubcategory ? ['legendary', 'mythic'] : MARKETPLACE_RARITY_OPTIONS).map((rarity) => (
+                  {(isAbilitySubcategory ? ['legendary'] as const : isSkillbookSubcategory ? ['epic', 'legendary'] as const : isMountsSubcategory ? ['legendary', 'mythic'] as const : MARKETPLACE_RARITY_OPTIONS).map((rarity) => (
                     <button
                       key={rarity}
                       type="button"

@@ -16,7 +16,7 @@ const MarketplacePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [rarityFilter, setRarityFilter] = useState<'all' | MarketplaceRarity>('all');
   const [failedThumbnailImages, setFailedThumbnailImages] = useState<Record<string, boolean>>({});
-  const [priceRefreshCounter, setPriceRefreshCounter] = useState(0);
+  const [priceRefreshCounter] = useState(0);
 
   const publicItems = useMemo(() => items.filter((item) => item.isVisible), [items]);
 
