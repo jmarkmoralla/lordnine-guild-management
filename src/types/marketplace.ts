@@ -64,6 +64,7 @@ export interface MarketplaceItem {
   pricePhp: number;
   rarity: MarketplaceRarity;
   isVisible: boolean;
+  isAppraised: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,7 +302,7 @@ export const formatMarketplaceCategory = (category: MarketplaceCategory) => ({
 }[category]);
 
 export const formatMarketplaceSubcategory = (subcategory: MarketplaceSubcategory) => ({
-  gauntlet: 'Gauntlet',
+  gauntlet: 'Knuckles',
   gadgets: 'Gadgets',
   swordAndShield: 'Sword and Shield',
   battleStaff: 'Battle Staff',
@@ -422,6 +423,57 @@ export const getDiscountedMarketplacePriceValues = (
   };
 };
 
+export interface NextMarketPriceInfo {
+  currencyType: string;
+  price: number;
+  unitPrice: number;
+}
+
+export interface NextMarketItem {
+  name: string;
+  imageUrl: string;
+  amount: number;
+  description: string;
+}
+
+export interface NextMarketSale {
+  id: number;
+  item: NextMarketItem;
+  displayAmount: number;
+  fiatPriceInfo: NextMarketPriceInfo;
+  cryptoPriceInfo: NextMarketPriceInfo;
+  isCryptoPaymentOnly: boolean;
+  isOrderInProgress: boolean;
+}
+
+export interface NextMarketSearchResponse {
+  content: NextMarketSale[];
+  pageNumber: number;
+  totalElements: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface NextMarketPriceMatch {
+  matchedSaleName: string;
+  saleId: number;
+  usdPrice: number;
+  usdtPrice: number;
+  fiatPrice: number;
+  fiatCurrency: string;
+  quantity: number;
+  isExactMatch?: boolean;
+}
+
+export interface NextMarketPriceResult {
+  itemName: string;
+  matchedSaleName: string;
+  saleUrl: string;
+  usdPrice: number;
+  usdtPrice: number;
+  quantity: number;
+}
+
 export const getDiscountedMarketplacePriceDisplay = (
   item: MarketplaceItem,
   pricingSettings?: MarketplacePricingSettings,
@@ -431,5 +483,42 @@ export const getDiscountedMarketplacePriceDisplay = (
   return {
     usdDisplay: discountedPrice.usd === null ? '-' : marketplaceUsdFormatter.format(discountedPrice.usd),
     phpDisplay: marketplacePhpFormatter.format(discountedPrice.php),
+  };
+};
+
+const NEXT_MARKET_PRESET_IDS: Record<MarketplaceCategory, { presetId: number; subPresetMap: Partial<Record<MarketplaceSubcategory, number>>; rarityMap: Record<MarketplaceRarity, number> }> = {
+  weapon: { presetId: 1, subPresetMap: { gauntlet: 2, gadgets: 58, swordAndShield: 3, battleStaff: 4, battleShield: 5, greatsword: 6, staff: 7, dualDaggers: 8, bow: 9, crossbow: 10 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  clothArmor: { presetId: 11, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  leatherArmor: { presetId: 17, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  plateArmor: { presetId: 23, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  cloak: { presetId: 53, subPresetMap: { battleCloak: 54, destructionCloak: 55, spiritCloak: 56, valorCloak: 57 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  accessories: { presetId: 29, subPresetMap: { necklace: 30, earrings: 31, bracelet: 32, ring: 33, belt: 34 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  consumables: { presetId: 42, subPresetMap: { ability: 43, skillbook: 44, mounts: 45 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+};
+
+export const getNextMarketSearchUrl = (item: Pick<MarketplaceItem, 'name' | 'category' | 'subcategory' | 'rarity'>): string => {
+  const params = new URLSearchParams();
+  params.set('keyword', item.name);
+  params.set('viewType', 'fiat');
+  params.set('sort', 'PRICE_ASC');
+  params.set('realmCode', 'OLD_REALM');
+
+  const presets = getNextMarketPresetIds(item);
+  if (presets) {
+    params.set('presetId', String(presets.presetId));
+    if (presets.subPresetId != null) params.set('subPresetId', String(presets.subPresetId));
+    params.set('refPresetId', String(presets.refPresetId));
+  }
+
+  return `https://l9asia.nextmarket.games/marketplace?${params.toString()}`;
+};
+
+export const getNextMarketPresetIds = (item: Pick<MarketplaceItem, 'category' | 'subcategory' | 'rarity'>): { presetId: number; subPresetId?: number; refPresetId: number } | undefined => {
+  const preset = NEXT_MARKET_PRESET_IDS[item.category];
+  if (!preset) return undefined;
+  return {
+    presetId: preset.presetId,
+    subPresetId: preset.subPresetMap[item.subcategory],
+    refPresetId: preset.rarityMap[item.rarity],
   };
 };
