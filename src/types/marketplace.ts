@@ -498,7 +498,8 @@ const NEXT_MARKET_PRESET_IDS: Record<MarketplaceCategory, { presetId: number; su
 
 export const getNextMarketSearchUrl = (item: Pick<MarketplaceItem, 'name' | 'category' | 'subcategory' | 'rarity'>): string => {
   const params = new URLSearchParams();
-  params.set('keyword', item.name);
+  const cleanKeyword = item.name.replace(/\s*\((?:Not\s+)?Apprais(?:e|ed)\)\s*$/i, '').trim();
+  params.set('keyword', cleanKeyword || item.name);
   params.set('viewType', 'fiat');
   params.set('sort', 'PRICE_ASC');
   params.set('realmCode', 'OLD_REALM');
