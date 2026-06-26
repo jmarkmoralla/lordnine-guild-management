@@ -668,12 +668,24 @@ const isNameMatch = (saleName, keyword) => {
   return false;
 };
 
-const findBestNextMarketMatch = async (items, keyword) => {
+const getAppraiseStatus = (name) => {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+  if (/not\s+apprai/.test(normalized)) return 'not-appraised';
+  if (/apprai/.test(normalized)) return 'appraised';
+  return null;
+};
+
+const findBestNextMarketMatch = async (items, keyword, desiredStatus) => {
   if (!items || items.length === 0) return null;
 
   items.sort((a, b) => a.cryptoPriceInfo.price - b.cryptoPriceInfo.price);
 
-  const matches = items.filter((sale) => isNameMatch(sale.item.name, keyword));
+  let matches = items.filter((sale) => isNameMatch(sale.item.name, keyword));
+
+  matches = matches.filter((sale) => {
+    const status = getAppraiseStatus(sale.item.name);
+    return status === null || status === desiredStatus;
+  });
 
   if (matches.length === 0) return null;
 
@@ -764,10 +776,13 @@ exports.fetchNextMarketPrices = onRequest(
     const searchUrl = typeof request.query.searchUrl === 'string' ? request.query.searchUrl.trim() : '';
     let keyword, presetId, subPresetId, refPresetId;
 
+    let isAppraised = false;
+
     if (searchUrl) {
       try {
         const parsed = new URL(searchUrl);
         keyword = parsed.searchParams.get('keyword') || '';
+        isAppraised = parsed.searchParams.get('isAppraised') === 'true';
         presetId = parsed.searchParams.get('presetId') ? Number(parsed.searchParams.get('presetId')) : null;
         subPresetId = parsed.searchParams.get('subPresetId') ? Number(parsed.searchParams.get('subPresetId')) : null;
         refPresetId = parsed.searchParams.get('refPresetId') ? Number(parsed.searchParams.get('refPresetId')) : null;
@@ -788,23 +803,9 @@ exports.fetchNextMarketPrices = onRequest(
     }
 
     try {
-      let searchKeyword = keyword;
       let result = null;
 
-      try {
-        const suggestionUrl = `${MARKETPLACE_KEYWORD_SUGGESTION_ENDPOINT}?keyword=${encodeURIComponent(keyword)}&realmCode=OLD_REALM`;
-        const suggestionResponse = await fetch(suggestionUrl, {
-          headers: { Accept: 'application/json' },
-        });
-        if (suggestionResponse.ok) {
-          const suggestions = await suggestionResponse.json();
-          if (Array.isArray(suggestions) && suggestions.length > 0) {
-            searchKeyword = suggestions[0];
-          }
-        }
-      } catch {
-        logger.warn('Suggestion API failed, using original keyword', { keyword });
-      }
+      const desiredStatus = isAppraised ? 'appraised' : 'not-appraised';
 
       const searchAttempts = [
         { label: 'full presets', presetId, subPresetId, refPresetId },
@@ -819,7 +820,7 @@ exports.fetchNextMarketPrices = onRequest(
         const attemptItems = [];
 
         for (; page < MAX_PAGES; page++) {
-          const payload = await fetchNextMarketPage(page, searchKeyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
+          const payload = await fetchNextMarketPage(page, keyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
           const content = payload.content || [];
 
           attemptItems.push(...content);
@@ -827,29 +828,34 @@ exports.fetchNextMarketPrices = onRequest(
           if (payload.last || content.length === 0) break;
         }
 
-        const match = await findBestNextMarketMatch(attemptItems, searchKeyword);
+        const match = await findBestNextMarketMatch(attemptItems, keyword, desiredStatus);
         if (match) {
           result = match;
           break;
         }
       }
 
-      if (!result && searchKeyword !== keyword) {
-        for (const attempt of searchAttempts) {
-          let page = 0;
-          const attemptItems = [];
+      if (!result && /\((?:Not\s+)?Apprais(?:e|ed)\)/i.test(keyword)) {
+        const baseFallbackKeyword = keyword.replace(/\s*\((?:Not\s+)?Apprais(?:e|ed)\)\s*$/i, '').trim();
+        if (baseFallbackKeyword !== keyword) {
+          for (const attempt of searchAttempts) {
+            let page = 0;
+            const attemptItems = [];
 
-          for (; page < MAX_PAGES; page++) {
-            const payload = await fetchNextMarketPage(page, keyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
-            const content = payload.content || [];
-            attemptItems.push(...content);
-            if (payload.last || content.length === 0) break;
-          }
+            for (; page < MAX_PAGES; page++) {
+              const payload = await fetchNextMarketPage(page, baseFallbackKeyword, attempt.presetId, attempt.subPresetId, attempt.refPresetId);
+              const content = payload.content || [];
 
-          const match = await findBestNextMarketMatch(attemptItems, keyword);
-          if (match) {
-            result = match;
-            break;
+              attemptItems.push(...content);
+
+              if (payload.last || content.length === 0) break;
+            }
+
+            const match = await findBestNextMarketMatch(attemptItems, baseFallbackKeyword, desiredStatus);
+            if (match) {
+              result = match;
+              break;
+            }
           }
         }
       }

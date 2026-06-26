@@ -489,17 +489,18 @@ export const getDiscountedMarketplacePriceDisplay = (
 const NEXT_MARKET_PRESET_IDS: Record<MarketplaceCategory, { presetId: number; subPresetMap: Partial<Record<MarketplaceSubcategory, number>>; rarityMap: Record<MarketplaceRarity, number> }> = {
   weapon: { presetId: 1, subPresetMap: { gauntlet: 2, gadgets: 58, swordAndShield: 3, battleStaff: 4, battleShield: 5, greatsword: 6, staff: 7, dualDaggers: 8, bow: 9, crossbow: 10 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
   clothArmor: { presetId: 11, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
-  leatherArmor: { presetId: 17, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
-  plateArmor: { presetId: 23, subPresetMap: { helm: 12, upperArmor: 13, lowerArmor: 14, gloves: 15, boots: 16 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  leatherArmor: { presetId: 17, subPresetMap: { helm: 18, upperArmor: 19, lowerArmor: 20, gloves: 21, boots: 22 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
+  plateArmor: { presetId: 23, subPresetMap: { helm: 24, upperArmor: 25, lowerArmor: 26, gloves: 27, boots: 28 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
   cloak: { presetId: 53, subPresetMap: { battleCloak: 54, destructionCloak: 55, spiritCloak: 56, valorCloak: 57 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
   accessories: { presetId: 29, subPresetMap: { necklace: 30, earrings: 31, bracelet: 32, ring: 33, belt: 34 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
   consumables: { presetId: 42, subPresetMap: { ability: 43, skillbook: 44, mounts: 45 }, rarityMap: { epic: 50, legendary: 51, mythic: 52 } },
 };
 
-export const getNextMarketSearchUrl = (item: Pick<MarketplaceItem, 'name' | 'category' | 'subcategory' | 'rarity'>): string => {
+export const getNextMarketSearchUrl = (item: Pick<MarketplaceItem, 'name' | 'category' | 'subcategory' | 'rarity' | 'part' | 'isAppraised'>): string => {
   const params = new URLSearchParams();
-  const cleanKeyword = item.name.replace(/\s*\((?:Not\s+)?Apprais(?:e|ed)\)\s*$/i, '').trim();
-  params.set('keyword', cleanKeyword || item.name);
+  const keyword = item.name;
+  params.set('keyword', keyword);
+  params.set('isAppraised', String(item.isAppraised));
   params.set('viewType', 'fiat');
   params.set('sort', 'PRICE_ASC');
   params.set('realmCode', 'OLD_REALM');
