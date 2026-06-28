@@ -23,7 +23,7 @@
   color: #e7dfca;
   border-radius: 11px;
   margin-top: 1rem;
-  padding: 0.60rem 1.40rem;
+  padding: 0.60rem 1.38rem;
   text-align: center;
   display: flex;
   align-items: center;
@@ -98,7 +98,7 @@
 }
 
 .hidden-class-board-title-wrap {
-  margin: 0 auto;
+  margin: 1rem auto;
   text-align: center;
   width: min(520px, 100%);
   min-height: 128px;
@@ -177,10 +177,10 @@
 .hidden-node-lanes {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.5rem;
   position: relative;
   z-index: 1;
-  margin-top: -0.35rem;
+  margin-top: 1.5rem;
 }
 
 .hidden-node-group + .hidden-node-group {
@@ -503,17 +503,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 480px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  max-height: none;
   margin-top: 1.0rem;
-}
-
-.hidden-progression-list::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 .hidden-progression-item {
