@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Award, Crown, Loader, Pencil, Plus, Search, SlidersHorizontal, Trophy, Trash2, Users, X } from 'lucide-react';
+import { Award, Crown, Download, Loader, Pencil, Plus, Search, SlidersHorizontal, Trophy, Trash2, Users, X } from 'lucide-react';
 import '../styles/Attendance.css';
 import '../styles/Rankings.css';
 import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
 import { useFirestoreMembers, type MemberRanking } from '../hooks/useFirestoreMembers';
 import { getCombatPowerMultiplier } from '../utils/combatPowerMultiplier.ts';
 import { DEFAULT_MEMBER_CLASS, MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
+import * as XLSX from 'xlsx';
 
 interface MembersManagePageProps {
   userType: 'guest' | 'admin';
@@ -27,6 +28,7 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [selectedGuildFilter, setSelectedGuildFilter] = useState('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<'all' | MemberClass>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const guildMaster = members.find((member) => member.memberType === 'guild master');
   const displayFactionLeader = factionLeader || guildMaster?.name || 'None';
 
@@ -179,6 +181,62 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
     }
   };
 
+  const handleExportMembers = () => {
+    if (isExporting || filteredMembers.length === 0) return;
+
+    setIsExporting(true);
+
+    try {
+      const header = [
+        'No.',
+        'Name',
+        'Class',
+        'Level',
+        'Combat Power',
+        'Multiplier',
+        'Guild',
+        'Type',
+      ];
+
+      const data = filteredMembers.map((member, index) => [
+        index + 1,
+        member.name,
+        member.playerClass,
+        member.level,
+        member.combatPower,
+        getCombatPowerMultiplier(member.combatPower).toFixed(1),
+        member.guildName,
+        member.memberType,
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+
+      ws['!cols'] = [
+        { wch: 5 },
+        { wch: 22 },
+        { wch: 14 },
+        { wch: 7 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 14 },
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Members');
+
+      const now = new Date();
+      const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const filename = `members-export-${datePart}.xlsx`;
+
+      XLSX.writeFile(wb, filename);
+    } catch (error) {
+      console.error('Failed to export members:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleWalletAddressClick = async (memberId: string, walletAddress: string) => {
     if (!walletAddress.trim()) return;
 
@@ -285,6 +343,16 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
           aria-expanded={showFilters}
         >
           <SlidersHorizontal size={16} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="export-attendance-btn"
+          onClick={handleExportMembers}
+          title="Export to Excel"
+          aria-label="Export to Excel"
+          disabled={isExporting || filteredMembers.length === 0}
+        >
+          {isExporting ? <Loader size={16} strokeWidth={1.8} /> : <Download size={16} strokeWidth={1.8} />}
         </button>
         <button
           type="button"
