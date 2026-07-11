@@ -16,6 +16,8 @@ import LoginPage from './components/LoginPage'
 import ManageAdminsPage from './components/ManageAdminsPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
+import { AttendanceSummaryProvider } from './contexts/AttendanceSummaryContext'
+import { ParticipationProvider } from './contexts/ParticipationContext'
 import './App.css'
 
 const VALID_PAGE_KEYS = new Set([
@@ -150,7 +152,7 @@ function App() {
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard':
-        return <DashboardPage />
+        return <DashboardPage userName={user?.displayName ?? undefined} />
       case 'attendance':
         return <AttendancePage userType={userType!} mode="view" />
       case 'manage-attendance':
@@ -176,7 +178,7 @@ function App() {
       case 'boss-timer':
         return <ManageBossTimerPage userType={userType!} />
       default:
-        return <DashboardPage />
+        return <DashboardPage userName={user?.displayName ?? undefined} />
     }
   }
 
@@ -217,7 +219,11 @@ function App() {
         onClose={() => setIsSidebarOpen(false)}
       />
       <main className="main-content">
-        {renderPage()}
+        <AttendanceSummaryProvider>
+          <ParticipationProvider>
+            {renderPage()}
+          </ParticipationProvider>
+        </AttendanceSummaryProvider>
       </main>
       {showLoginModal && (
         <div className="login-overlay" role="dialog" aria-modal="true">
