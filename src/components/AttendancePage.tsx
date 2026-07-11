@@ -7,8 +7,8 @@ import '../styles/Attendance.css';
 import { auth, db } from '../config/firebase';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
 import { type AttendanceStatus, useFirestoreAttendance } from '../hooks/useFirestoreAttendance';
-import { useFirestoreAttendanceParticipation } from '../hooks/useFirestoreAttendanceParticipation';
-import { useFirestoreAttendanceSummary } from '../hooks/useFirestoreAttendanceSummary';
+import { useAttendanceParticipation } from '../contexts/ParticipationContext';
+import { useAttendanceSummary } from '../contexts/AttendanceSummaryContext';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
 import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 import { getAttendancePoints, getAttendancePointsForBossSelection } from '../utils/attendancePoints.ts';
@@ -1348,12 +1348,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     error: summaryError,
     syncPresentMembersToSummary,
     refreshSummaryForMember,
-  } = useFirestoreAttendanceSummary();
+  } = useAttendanceSummary();
   const {
     totalSessions,
     loading: participationLoading,
     error: participationError,
-  } = useFirestoreAttendanceParticipation();
+  } = useAttendanceParticipation();
   const {
     records,
     loading: attendanceLoading,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Award, Loader, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Award, Loader, Search, X } from 'lucide-react';
 import '../styles/Attendance.css';
 import '../styles/Rankings.css';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
@@ -12,8 +12,6 @@ const RankingsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGuildFilter, setSelectedGuildFilter] = useState('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<'all' | MemberClass>('all');
-  const [showFilters, setShowFilters] = useState(false);
-
   const rankedMembers = [...members].sort((a, b) => b.combatPower - a.combatPower);
   const guildFilterOptions = useMemo(() => {
     const nextGuildNames = new Set<string>();
@@ -24,8 +22,6 @@ const RankingsPage: React.FC = () => {
 
     return [...nextGuildNames].sort((first, second) => first.localeCompare(second));
   }, [members]);
-
-  const hasActiveFilters = selectedGuildFilter !== 'all' || selectedClassFilter !== 'all';
 
   const filteredMembers = rankedMembers.filter((member) => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -128,21 +124,6 @@ const RankingsPage: React.FC = () => {
               </button>
             )}
           </div>
-          <button
-            type="button"
-            className={`refresh-btn-filter icon-only filter-toggle-btn${hasActiveFilters ? ' active' : ''}`}
-            onClick={() => setShowFilters((current) => !current)}
-            title="Filter members"
-            aria-label="Filter members"
-            aria-expanded={showFilters}
-          >
-            <SlidersHorizontal size={16} strokeWidth={1.8} />
-          </button>
-        </div>
-      )}
-
-      {!loading && members.length > 0 && showFilters && (
-        <div className="rankings-filter-panel" aria-label="Member filters">
           <select
             className="filter-select"
             value={selectedGuildFilter}

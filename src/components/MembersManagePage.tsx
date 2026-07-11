@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Award, Crown, Download, Loader, Pencil, Plus, Search, SlidersHorizontal, Trophy, Trash2, Users, X } from 'lucide-react';
+import { Award, Crown, Download, Loader, Pencil, Plus, Search, Trophy, Trash2, Users, X } from 'lucide-react';
 import '../styles/Attendance.css';
 import '../styles/Rankings.css';
 import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
@@ -27,7 +27,6 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGuildFilter, setSelectedGuildFilter] = useState('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<'all' | MemberClass>('all');
-  const [showFilters, setShowFilters] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const guildMaster = members.find((member) => member.memberType === 'guild master');
   const displayFactionLeader = factionLeader || guildMaster?.name || 'None';
@@ -50,8 +49,6 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
 
     return [...nextGuildNames].sort((first, second) => first.localeCompare(second));
   }, [guildNames, members]);
-
-  const hasActiveFilters = selectedGuildFilter !== 'all' || selectedClassFilter !== 'all';
 
   const filteredMembers = sortedMembers.filter((member) => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -334,16 +331,28 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className={`refresh-btn-filter icon-only filter-toggle-btn${hasActiveFilters ? ' active' : ''}`}
-          onClick={() => setShowFilters((current) => !current)}
-          title="Filter members"
-          aria-label="Filter members"
-          aria-expanded={showFilters}
+        <select
+          className="filter-select"
+          value={selectedGuildFilter}
+          onChange={(event) => setSelectedGuildFilter(event.target.value)}
+          aria-label="Filter members by guild"
         >
-          <SlidersHorizontal size={16} strokeWidth={1.8} />
-        </button>
+          <option value="all">All Guilds</option>
+          {guildFilterOptions.map((guildName) => (
+            <option key={guildName} value={guildName}>{guildName}</option>
+          ))}
+        </select>
+        <select
+          className="filter-select"
+          value={selectedClassFilter}
+          onChange={(event) => setSelectedClassFilter(event.target.value as 'all' | MemberClass)}
+          aria-label="Filter members by class"
+        >
+          <option value="all">All Classes</option>
+          {MEMBER_CLASSES.map((memberClass) => (
+            <option key={memberClass} value={memberClass}>{memberClass}</option>
+          ))}
+        </select>
         <button
           type="button"
           className="export-attendance-btn"
@@ -364,33 +373,6 @@ const MembersManagePage: React.FC<MembersManagePageProps> = ({ userType }) => {
           <Plus size={16} strokeWidth={1.8} />
         </button>
       </div>
-
-      {showFilters && (
-        <div className="rankings-filter-panel" aria-label="Member filters">
-          <select
-            className="filter-select"
-            value={selectedGuildFilter}
-            onChange={(event) => setSelectedGuildFilter(event.target.value)}
-            aria-label="Filter members by guild"
-          >
-            <option value="all">All Guilds</option>
-            {guildFilterOptions.map((guildName) => (
-              <option key={guildName} value={guildName}>{guildName}</option>
-            ))}
-          </select>
-          <select
-            className="filter-select"
-            value={selectedClassFilter}
-            onChange={(event) => setSelectedClassFilter(event.target.value as 'all' | MemberClass)}
-            aria-label="Filter members by class"
-          >
-            <option value="all">All Classes</option>
-            {MEMBER_CLASSES.map((memberClass) => (
-              <option key={memberClass} value={memberClass}>{memberClass}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {loading && (
         <div className="loading-state">

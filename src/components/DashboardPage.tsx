@@ -1,325 +1,209 @@
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Crown, Trophy, Users, Loader, Clock3 } from 'lucide-react';
 import '../styles/Dashboard.css';
-import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
 import { useFirestoreMembers } from '../hooks/useFirestoreMembers';
-import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
-import type { BossInfo } from '../hooks/useFirestoreBossInfo';
-import { formatPhilippinesMonthDayTime12, getPhilippinesNowDate } from '../utils/philippinesTime';
+import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
+import { Trophy, Users } from 'lucide-react';
+import { useMemo } from 'react';
+import { MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
+import { useAttendanceSummary } from '../contexts/AttendanceSummaryContext';
+import { useAttendanceParticipation } from '../contexts/ParticipationContext';
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-const RESPAWNING_WINDOW_MS = 10 * 60 * 1000;
+interface DashboardPageProps {
+  userName?: string;
+}
 
-const normalizeScheduledDays = (days?: string[]) => {
-  const validDays = (days ?? [])
-    .filter((day): day is typeof WEEKDAYS[number] => WEEKDAYS.includes(day as typeof WEEKDAYS[number]));
+const MAX_GUILD_CAPACITY = 50;
 
-  return Array.from(new Set(validDays));
+const formatToday = () => {
+  const now = new Date();
+  return now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 };
 
-const getDestroyerScheduledDays = (boss: BossInfo) => {
-  const normalized = normalizeScheduledDays(boss.scheduledDays);
-  if (normalized.length > 0) return normalized;
-
-  // Backward compatibility for existing Destroyers without explicit days: treat as daily.
-  return [...WEEKDAYS];
+const GUILD_COLORS: Record<string, string> = {
+  G1: '#4a90e2',
+  G2: '#f1c40f',
+  G3: '#2ecc71',
 };
 
-const isDailyDestroyerSchedule = (days: string[]) => days.length === WEEKDAYS.length;
+const CLASS_COLORS: Record<string, string> = {
+  'Bare Hands': '#2ecc71',
+  'Battle Shield': '#8d6e63',
+  'Battle Staff': '#9b59b6',
+  'Bow': '#e74c3c',
+  'Crossbow': '#f39c12',
+  'Dual Daggers': '#3498db',
+  'Staff': '#e84393',
+  'Sword and Shield': '#78909c',
+  'Greatsword': '#1a237e',
+};
 
-const getNextWeeklyOccurrence = (day?: string, time?: string, referenceDate?: Date) => {
-  if (!day || !time) return null;
-  const dayIndex = WEEKDAYS.indexOf(day as typeof WEEKDAYS[number]);
-  if (dayIndex < 0) return null;
+const BAR_COLORS = ['#f1c40f', '#e74c3c', '#2ecc71', '#3498db', '#9b59b6'];
 
-  const [hoursValue, minutesValue] = time.split(':');
-  const hours = Number(hoursValue);
-  const minutes = Number(minutesValue);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+const GuildPieChart: React.FC<{ ratio: number; color: string }> = ({ ratio, color }) => {
+  const size = 48;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 2;
+  const clamped = Math.min(ratio, 1);
+  const percent = Math.round(clamped * 100);
 
-  const now = referenceDate ?? getPhilippinesNowDate();
-  const target = new Date(now);
-  const currentDay = target.getDay();
-  const delta = dayIndex - currentDay;
-  target.setDate(target.getDate() + delta);
-  target.setHours(hours, minutes, 0, 0);
-
-  if (target <= now) {
-    target.setDate(target.getDate() + 7);
+  if (clamped === 0) {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="var(--bg-tertiary)" />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-secondary)">
+          0%
+        </text>
+      </svg>
+    );
   }
 
-  return target;
-};
-
-const getDailyNextOccurrence = (time?: string, referenceDate?: Date) => {
-  if (!time) return null;
-
-  const [hoursValue, minutesValue] = time.split(':');
-  const hours = Number(hoursValue);
-  const minutes = Number(minutesValue);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
-
-  const now = referenceDate ?? getPhilippinesNowDate();
-  const target = new Date(now);
-  target.setHours(hours, minutes, 0, 0);
-
-  if (target <= now) {
-    target.setDate(target.getDate() + 1);
+  if (clamped >= 1) {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill={color} />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">
+          100%
+        </text>
+      </svg>
+    );
   }
 
-  return target;
-};
+  const angle = clamped * 360;
+  const radians = ((angle - 90) * Math.PI) / 180;
+  const x = cx + r * Math.cos(radians);
+  const y = cy + r * Math.sin(radians);
+  const largeArc = angle > 180 ? 1 : 0;
 
-const getScheduledRespawnCandidates = (boss: BossInfo, referenceDate?: Date) => {
-  if (boss.spawnType !== 'scheduled') return [] as Date[];
-
-  const candidates = boss.bossType === 'Destroyer'
-    ? (() => {
-        const selectedDays = getDestroyerScheduledDays(boss);
-
-        if (isDailyDestroyerSchedule(selectedDays)) {
-          return [
-            getDailyNextOccurrence(boss.scheduledStartTime, referenceDate),
-            getDailyNextOccurrence(boss.scheduledEndTime, referenceDate),
-          ];
-        }
-
-        return selectedDays.flatMap((day) => [
-          getNextWeeklyOccurrence(day, boss.scheduledStartTime, referenceDate),
-          getNextWeeklyOccurrence(day, boss.scheduledEndTime, referenceDate),
-        ]);
-      })()
-    : [
-        getNextWeeklyOccurrence(boss.scheduledStartDay, boss.scheduledStartTime, referenceDate),
-        getNextWeeklyOccurrence(boss.scheduledEndDay, boss.scheduledEndTime, referenceDate),
-      ];
-
-  return candidates
-    .filter((date): date is Date => Boolean(date))
-    .sort((first, second) => first.getTime() - second.getTime());
-};
-
-const getNextScheduledOccurrence = (boss: BossInfo, referenceDate?: Date) => {
-  if (boss.spawnType !== 'scheduled') return null;
-
-  const candidates = getScheduledRespawnCandidates(boss, referenceDate);
-  return candidates[0] ?? null;
-};
-
-const getNextRespawnDate = (boss: BossInfo) => {
-  if (boss.spawnType === 'scheduled') {
-    const isDead = boss.status === 'dead';
-    const killedDate = boss.killedTime ? new Date(boss.killedTime) : null;
-    const hasValidKilledDate = Boolean(killedDate && !Number.isNaN(killedDate.getTime()));
-
-    if (isDead && hasValidKilledDate) {
-      return getNextScheduledOccurrence(boss, killedDate as Date);
-    }
-
-    return getNextScheduledOccurrence(boss);
-  }
-
-  if (!boss.killedTime) return null;
-
-  const spawnHours = Number(boss.spawnTime);
-  if (Number.isNaN(spawnHours)) return null;
-
-  const killedDate = new Date(boss.killedTime);
-  if (Number.isNaN(killedDate.getTime())) return null;
-
-  return new Date(killedDate.getTime() + spawnHours * 60 * 60 * 1000);
-};
-
-const compareByNextRespawn = (first: BossInfo, second: BossInfo) => {
-  const firstRespawn = getNextRespawnDate(first);
-  const secondRespawn = getNextRespawnDate(second);
-
-  if (!firstRespawn && !secondRespawn) {
-    return first.level - second.level;
-  }
-
-  if (!firstRespawn) return 1;
-  if (!secondRespawn) return -1;
-
-  const respawnDifference = firstRespawn.getTime() - secondRespawn.getTime();
-  if (respawnDifference !== 0) return respawnDifference;
-
-  return first.level - second.level;
-};
-
-const getNextSpawnTime = (boss: BossInfo): ReactNode => {
-  if (boss.spawnType === 'scheduled') {
-    const nextOccurrence = getNextScheduledOccurrence(boss);
-
-    return nextOccurrence ? `Next Respawn: ${formatPhilippinesMonthDayTime12(nextOccurrence)}` : 'N/A';
-  }
-
-  if (!boss.killedTime) return 'N/A';
-
-  const spawnHours = Number(boss.spawnTime);
-  if (Number.isNaN(spawnHours)) return 'N/A';
-
-  const killedDate = new Date(boss.killedTime);
-  if (Number.isNaN(killedDate.getTime())) return 'N/A';
-
-  const nextSpawn = new Date(killedDate.getTime() + spawnHours * 60 * 60 * 1000);
-  return `Next Respawn: ${formatPhilippinesMonthDayTime12(nextSpawn)}`;
-};
-
-const getRespawnCountdown = (boss: BossInfo) => {
-  const nextRespawn = getNextRespawnDate(boss);
-  if (!nextRespawn) return 'N/A';
-
-  const now = getPhilippinesNowDate();
-  const remainingMs = Math.max(0, nextRespawn.getTime() - now.getTime());
-  const totalSeconds = Math.floor(remainingMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
-
-const renderScheduledIndicator = (boss: BossInfo): ReactNode => {
-  if (boss.spawnType !== 'scheduled') return null;
+  const path = `M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${largeArc} 1 ${x} ${y} Z`;
 
   return (
-    <span className="boss-scheduled-indicator">
-      <Clock3 size={12} strokeWidth={2} />
-      Scheduled
-    </span>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={r} fill="var(--bg-tertiary)" />
+      <path d={path} fill={color} />
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">
+        {percent}%
+      </text>
+    </svg>
   );
 };
 
-const getDisplayBossStatus = (boss: BossInfo): 'alive' | 'dead' | 'respawning' | 'unknown' => {
-  const persistedStatus = boss.status === 'alive' ? 'alive' : boss.status === 'unknown' ? 'unknown' : 'dead';
-  if (persistedStatus === 'alive') return 'alive';
-  if (persistedStatus === 'unknown') return 'unknown';
+const ClassPieChart: React.FC<{ entries: Array<{ cls: string; count: number }>; total: number }> = ({ entries, total }) => {
+  const size = 160;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 4;
 
-  const nextRespawnTime = getNextRespawnDate(boss);
-  if (!nextRespawnTime) return 'dead';
-
-  const now = getPhilippinesNowDate();
-  const timeUntilRespawn = nextRespawnTime.getTime() - now.getTime();
-  if (timeUntilRespawn <= 0) return 'alive';
-  if (timeUntilRespawn <= RESPAWNING_WINDOW_MS) return 'respawning';
-  return 'dead';
-};
-
-const getBossSpawnTimeLabel = (boss: BossInfo) => {
-  if (boss.spawnType !== 'scheduled') return `${boss.spawnTime}h`;
-
-  if (boss.bossType === 'Destroyer') {
-    const selectedDays = getDestroyerScheduledDays(boss);
-    const dayLabel = isDailyDestroyerSchedule(selectedDays) ? 'Daily' : selectedDays.join(', ');
-    const first = boss.scheduledStartTime || '-';
-    const second = boss.scheduledEndTime || '-';
-    return `${dayLabel} ${first} / ${dayLabel} ${second}`;
+  if (total === 0) {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="var(--bg-tertiary)" />
+      </svg>
+    );
   }
 
-  const firstDay = boss.scheduledStartDay || '-';
-  const firstTime = boss.scheduledStartTime || '-';
-  const secondDay = boss.scheduledEndDay || '-';
-  const secondTime = boss.scheduledEndTime || '-';
-  return `${firstDay} ${firstTime} / ${secondDay} ${secondTime}`;
+  const slices: Array<{ d: string; fill: string; cls: string }> = [];
+  let currentAngle = -90;
+
+  entries.forEach((entry) => {
+    const sliceAngle = (entry.count / total) * 360;
+    const startRad = (currentAngle * Math.PI) / 180;
+    const endRad = ((currentAngle + sliceAngle) * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+    const largeArc = sliceAngle > 180 ? 1 : 0;
+
+    slices.push({
+      d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`,
+      fill: CLASS_COLORS[entry.cls] ?? '#aaa',
+      cls: entry.cls,
+    });
+
+    currentAngle += sliceAngle;
+  });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {slices.map((s) => <path key={s.cls} d={s.d} fill={s.fill} />)}
+    </svg>
+  );
 };
 
-const getBossDetailNextRespawn = (boss: BossInfo) => {
-  if (getDisplayBossStatus(boss) === 'unknown') return '-';
-
-  const nextRespawn = getNextRespawnDate(boss);
-  if (!nextRespawn) return 'N/A';
-
-  return formatPhilippinesMonthDayTime12(nextRespawn);
-};
-
-const getBossDetailSpawnType = (boss: BossInfo) => (boss.spawnType === 'scheduled' ? 'Scheduled' : 'Fixed');
-
-const getBossDetailStatus = (boss: BossInfo) => {
-  const status = getDisplayBossStatus(boss);
-
-  if (status === 'respawning') return 'Respawning';
-  if (status === 'alive') return 'Alive';
-  if (status === 'dead') return 'Dead';
-  return 'Unknown';
-};
-
-const DashboardPage: React.FC = () => {
+const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
   const { members } = useFirestoreMembers();
-  const { factionLeader, guildNames, loading: allianceLoading } = useFirestoreAllianceInfo();
-  const { bosses, loading: bossLoading } = useFirestoreBossInfo();
-  const [, setStatusTick] = useState(0);
-  const [selectedBoss, setSelectedBoss] = useState<BossInfo | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
-  const [tooltipPlacement, setTooltipPlacement] = useState<'top' | 'bottom'>('bottom');
-  
-  const guildMaster = members.find((member) => member.memberType === 'guild master');
-  const displayFactionLeader = factionLeader || guildMaster?.name || 'None';
-  const aliveBosses = bosses
-    .filter((boss) => getDisplayBossStatus(boss) === 'alive')
-    .slice()
-    .sort(compareByNextRespawn);
-  const respawningBosses = bosses
-    .filter((boss) => getDisplayBossStatus(boss) === 'respawning')
-    .slice()
-    .sort(compareByNextRespawn);
-  const deadBosses = bosses
-    .filter((boss) => getDisplayBossStatus(boss) === 'dead')
-    .slice()
-    .sort(compareByNextRespawn);
-  const unknownBosses = bosses
-    .filter((boss) => getDisplayBossStatus(boss) === 'unknown')
-    .slice()
-    .sort((first, second) => first.level - second.level);
+  const { summaryRows } = useAttendanceSummary();
+  const { totalSessions } = useAttendanceParticipation();
+  const { guildInfo } = useFirestoreGuildInfo();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStatusTick((current) => current + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSelectedBoss(null);
-        setTooltipPosition(null);
+  const guildEntries = useMemo(() => {
+    const guildMap = new Map<string, number>();
+    members.forEach((m) => {
+      if (m.guildName.trim()) {
+        guildMap.set(m.guildName.trim(), (guildMap.get(m.guildName.trim()) ?? 0) + 1);
       }
-    };
+    });
+    return [...guildMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, count], index) => ({ label: `G${index + 1}`, count }));
+  }, [members]);
 
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, []);
+  const guildAttendance = useMemo(() => {
+    const map = new Map<string, number>();
 
-  const openBossDetails = (boss: BossInfo, cardElement: HTMLElement) => {
-    const rect = cardElement.getBoundingClientRect();
-    const tooltipWidth = 520;
-    const tooltipHeight = 320;
-    const gap = 10;
+    summaryRows.forEach((row) => {
+      const member = members.find((m) => m.name === row.name);
+      const guildName = member?.guildName?.trim();
+      if (!guildName) return;
 
-    const initialTop = rect.bottom + gap;
-    const shouldPlaceAbove = initialTop + tooltipHeight > window.innerHeight - 8;
-    const top = initialTop + tooltipHeight > window.innerHeight - 8
-      ? Math.max(8, rect.top - tooltipHeight - gap)
-      : initialTop;
+      const current = map.get(guildName) ?? 0;
+      map.set(guildName, current + row.fieldBossCount);
+    });
 
-    const initialLeft = rect.left + rect.width / 2 - tooltipWidth / 2;
-    const left = Math.min(
-      Math.max(8, initialLeft),
-      Math.max(8, window.innerWidth - tooltipWidth - 8)
-    );
+    const totalAllGuilds = [...map.values()].reduce((s, v) => s + v, 0);
 
-    setSelectedBoss(boss);
-    setTooltipPosition({ top, left });
-    setTooltipPlacement(shouldPlaceAbove ? 'top' : 'bottom');
-  };
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, total], i) => ({
+        label: `G${i + 1}`,
+        pct: totalAllGuilds > 0 ? +(((total / totalAllGuilds) * 100).toFixed(1)) : 0,
+      }));
+  }, [summaryRows, members]);
 
-  const closeBossDetails = () => {
-    setSelectedBoss(null);
-    setTooltipPosition(null);
-  };
+  const topAttendees = useMemo(() => {
+    return summaryRows
+      .map((row) => {
+        const member = members.find((m) => m.name === row.name);
+        return { ...row, guildName: member?.guildName ?? '—' };
+      })
+      .filter((row) => totalSessions > 0 && (row.totalEventsAttended ?? 0) >= totalSessions && (row.totalAttendance ?? 0) > 0)
+      .sort((a, b) => (b.totalAttendance ?? 0) - (a.totalAttendance ?? 0))
+      .slice(0, 10);
+  }, [summaryRows, members, totalSessions]);
+
+  const maxAttended = useMemo(() => topAttendees[0]?.totalAttendance ?? 1, [topAttendees]);
+
+  const classCounts = useMemo(() => {
+    const map = new Map<MemberClass, number>();
+    members.forEach((m) => map.set(m.playerClass, (map.get(m.playerClass) ?? 0) + 1));
+    return MEMBER_CLASSES
+      .map((cls) => ({ cls, count: map.get(cls) ?? 0 }))
+      .filter((e) => e.count > 0);
+  }, [members]);
+
+  const totalClassMembers = useMemo(() => classCounts.reduce((s, e) => s + e.count, 0), [classCounts]);
+
+  const topCPMembers = useMemo(() => {
+    return [...members]
+      .filter((m) => m.status === 'active')
+      .sort((a, b) => b.combatPower - a.combatPower)
+      .slice(0, 3);
+  }, [members]);
 
   return (
     <div className="page-container dashboard-page">
@@ -327,242 +211,173 @@ const DashboardPage: React.FC = () => {
         <h2>Dashboard</h2>
         <p className="page-subtitle">Welcome to Guild Dashboard</p>
       </div>
-
-      <div className="dashboard-grid">
-        <div className="stat-card">
-          <div className="stat-icon" aria-hidden="true">
-            <Users size={28} strokeWidth={1.75} />
-          </div>
-          <div className="stat-content">
-            <h3>Faction Members</h3>
-            <p className="stat-value">{members.length}</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" aria-hidden="true">
-            <Trophy size={28} strokeWidth={1.75} />
-          </div>
-          <div className="stat-content">
-            <h3>Allied Guilds</h3>
-            <p className="stat-value">
-              {allianceLoading ? (
-                <Loader size={20} className="spinner" />
-              ) : (
-                guildNames.length
-              )}
-            </p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" aria-hidden="true">
-            <Crown size={28} strokeWidth={1.75} />
-          </div>
-          <div className="stat-content">
-            <h3>Faction Leader</h3>
-            <p className="stat-value">{displayFactionLeader}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="boss-timers">
-        <div className="boss-header">
-          <h3>BOSS TIMERS</h3>
-          <span className="boss-count">{bosses.length} total</span>
-        </div>
-        {bossLoading && (
-          <div className="loading-state">
-            <p>Loading bosses... <Loader size={16} strokeWidth={1.8} /></p>
-          </div>
-        )}
-        {!bossLoading && bosses.length === 0 && (
-          <div className="empty-state">
-            <p>No bosses configured</p>
-          </div>
-        )}
-        {!bossLoading && bosses.length > 0 && (
-          <div className="boss-groups">
-            <div className="boss-group boss-group-alive">
-              <div className="boss-group-header">
-                <span className="boss-group-title">Alive</span>
-                <span className="boss-group-count">{aliveBosses.length}</span>
-              </div>
-              <div className="boss-grid">
-                {aliveBosses.map((boss) => (
-                  <button
-                    key={boss.id}
-                    className={`boss-card ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
-                    type="button"
-                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
-                  >
-                    <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
-                    <img className="boss-image" src={boss.bossImage} alt={boss.name} />
-                    <div className="boss-meta">
-                      <span 
-                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
-                      >
-                        {boss.name}
-                      </span>
-                      <span className="boss-subtitle">Level {boss.level}</span>
-                      {renderScheduledIndicator(boss)}
-                    </div>
-                  </button>
-                ))}
-                {aliveBosses.length === 0 && (
-                  <div className="boss-empty">No alive bosses</div>
-                )}
-              </div>
-            </div>
-
-            <div className="boss-group boss-group-respawning">
-              <div className="boss-group-header">
-                <span className="boss-group-title">Respawning</span>
-                <span className="boss-group-count">{respawningBosses.length}</span>
-              </div>
-              <div className="boss-grid">
-                {respawningBosses.map((boss) => (
-                  <button
-                    key={boss.id}
-                    className={`boss-card boss-card-respawning ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
-                    type="button"
-                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
-                  >
-                    <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
-                    <img className="boss-image" src={boss.bossImage} alt={boss.name} />
-                    <div className="boss-meta">
-                      <span 
-                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
-                      >
-                        {boss.name}
-                      </span>
-                      <span className="boss-subtitle">Level {boss.level}</span>
-                      {renderScheduledIndicator(boss)}
-                      <div className="boss-next-respawn">
-                        {getNextSpawnTime(boss)}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {respawningBosses.length === 0 && (
-                  <div className="boss-empty">No respawning bosses</div>
-                )}
-              </div>
-            </div>
-
-            <div className="boss-group boss-group-dead">
-              <div className="boss-group-header">
-                <span className="boss-group-title">Dead</span>
-                <span className="boss-group-count">{deadBosses.length}</span>
-              </div>
-              <div className="boss-grid">
-                {deadBosses.map((boss) => (
-                  <button
-                    key={boss.id}
-                    className={`boss-card boss-card-dead ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
-                    type="button"
-                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
-                  >
-                    <div className="boss-countdown">{getRespawnCountdown(boss)}</div>
-                    <img className="boss-image" src={boss.bossImage} alt={boss.name} />
-                    <div className="boss-meta">
-                      <span 
-                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
-                      >
-                        {boss.name}
-                      </span>
-                      <span className="boss-subtitle">Level {boss.level}</span>
-                      {renderScheduledIndicator(boss)}
-                      <div className="boss-next-respawn">
-                        {getNextSpawnTime(boss)}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {deadBosses.length === 0 && (
-                  <div className="boss-empty">No dead bosses</div>
-                )}
-              </div>
-            </div>
-
-            <div className="boss-group boss-group-unknown">
-              <div className="boss-group-header">
-                <span className="boss-group-title">Unknown</span>
-                <span className="boss-group-count">{unknownBosses.length}</span>
-              </div>
-              <div className="boss-grid">
-                {unknownBosses.map((boss) => (
-                  <button
-                    key={boss.id}
-                    className={`boss-card boss-card-unknown ${selectedBoss?.id === boss.id ? 'boss-card-active' : ''}`}
-                    type="button"
-                    onClick={(event) => openBossDetails(boss, event.currentTarget)}
-                  >
-                    <div className="boss-countdown">00:00:00</div>
-                    <img className="boss-image" src={boss.bossImage} alt={boss.name} />
-                    <div className="boss-meta">
-                      <span
-                        className={`boss-name ${boss.bossType === 'Destroyer' ? 'boss-name-destroyer' : boss.bossType === 'Guild Boss' ? 'boss-name-guild' : ''}`}
-                      >
-                        {boss.name}
-                      </span>
-                      <span className="boss-subtitle">Level {boss.level}</span>
-                      {renderScheduledIndicator(boss)}
-                      <div className="boss-next-respawn">Next Respawn: ---</div>
-                    </div>
-                  </button>
-                ))}
-                {unknownBosses.length === 0 && (
-                  <div className="boss-empty">No unknown bosses</div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {selectedBoss && tooltipPosition && (
-        <div className="boss-tooltip-overlay" onClick={closeBossDetails}>
-          <div
-            className={`boss-tooltip-panel boss-tooltip-${tooltipPlacement}`}
-            style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="boss-tooltip-header">
-              <h4>Boss Details</h4>
-              <button
-                type="button"
-                className="boss-tooltip-close"
-                onClick={closeBossDetails}
-                aria-label="Close boss details"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="boss-tooltip-main">
-              <img className="boss-tooltip-image" src={selectedBoss.bossImage} alt={selectedBoss.name} />
-              <div className="boss-tooltip-name-wrap">
-                <div
-                  className={`boss-tooltip-name ${selectedBoss.bossType === 'Destroyer' ? 'boss-tooltip-name-destroyer' : selectedBoss.bossType === 'Guild Boss' ? 'boss-tooltip-name-guild' : ''}`}
-                >
-                  {selectedBoss.name}
-                </div>
-                <div className="boss-tooltip-type">{selectedBoss.bossType}</div>
-              </div>
-            </div>
-
-            <div className="boss-tooltip-grid">
-              <div className="boss-tooltip-item"><span>Level</span><strong>{selectedBoss.level}</strong></div>
-              <div className="boss-tooltip-item"><span>Spawn Type</span><strong>{getBossDetailSpawnType(selectedBoss)}</strong></div>
-              <div className="boss-tooltip-item"><span>Spawn Time</span><strong>{getBossSpawnTimeLabel(selectedBoss)}</strong></div>
-              <div className="boss-tooltip-item"><span>Spawn Region</span><strong>{selectedBoss.spawnRegion || 'N/A'}</strong></div>
-              <div className="boss-tooltip-item"><span>Status</span><strong>{getBossDetailStatus(selectedBoss)}</strong></div>
-              <div className="boss-tooltip-item"><span>Next Respawn</span><strong>{getBossDetailNextRespawn(selectedBoss)}</strong></div>
-            </div>
+      {userName && (
+        <div className="dashboard-welcome">
+          <img src="/assets/images/Avatar.png" alt="Avatar" className="dashboard-avatar" />
+          <div className="dashboard-welcome-text-wrap">
+            <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
+            <span className="dashboard-date">{formatToday()}</span>
           </div>
         </div>
       )}
+      <div className="dashboard-content">
+        <div className="dashboard-left">
+          <section className="guild-capacity-section">
+            <h3 className="guild-capacity-heading">Guilds</h3>
+            <div className="guild-capacity-grid">
+              {guildEntries.map((guild) => {
+                const available = MAX_GUILD_CAPACITY - guild.count;
+                return (
+                  <div className="guild-kpi-card" key={guild.label}>
+                    <div className="guild-kpi-left">
+                      <div
+                        className="guild-kpi-icon"
+                        aria-hidden="true"
+                        style={{ '--guild-color': GUILD_COLORS[guild.label] ?? '#4a90e2' } as React.CSSProperties}
+                      >
+                        <Users size={24} strokeWidth={1.75} />
+                      </div>
+                      <div className="guild-kpi-content">
+                        <h3>{guild.label}</h3>
+                        <p className="guild-kpi-count">{guild.count}/{MAX_GUILD_CAPACITY}</p>
+                        <p className="guild-kpi-available">
+                          {available === 0 ? 'Full' : `${available} slot${available !== 1 ? 's' : ''} available`}
+                        </p>
+                      </div>
+                    </div>
+                    <GuildPieChart ratio={guild.count / MAX_GUILD_CAPACITY} color={GUILD_COLORS[guild.label] ?? '#4a90e2'} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="attendance-section">
+            <h3 className="guild-capacity-heading">Attendance</h3>
+
+            <div className="attendance-subsection">
+              <h4 className="attendance-subheading">Field Boss Participation</h4>
+              {guildAttendance.length > 0 ? (
+                <div className="attendance-bar-chart">
+                  {guildAttendance.map((g) => (
+                    <div key={g.label} className="attendance-bar-row">
+                      <span className="attendance-bar-label">{g.label}</span>
+                      <div className="attendance-bar-track">
+                        <div className="attendance-bar-fill" style={{ width: `${g.pct}%` }} />
+                      </div>
+                      <span className="attendance-bar-value">{g.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="section-placeholder">No field boss participation data yet.</p>
+              )}
+            </div>
+
+            <div className="attendance-details-row">
+              <div className="attendance-top-attendees">
+                <div className="top-attendee-header">
+                  <h4 className="attendance-subheading">Top Attendees</h4>
+                  <span className="top-attendee-total-events">Total Bosses: {totalSessions}</span>
+                </div>
+                {topAttendees.length > 0 ? (
+                  <div className="top-attendee-chart">
+                    {topAttendees.map((row, i) => (
+                      <div key={row.id} className="top-attendee-bar-wrap">
+                        <div className="top-attendee-bar-container">
+                          <div
+                            className="top-attendee-bar"
+                            style={{
+                              height: `${((row.totalAttendance ?? 0) / maxAttended) * 100}%`,
+                              background: BAR_COLORS[i] ?? '#aaa',
+                            }}
+                          />
+                        </div>
+                        <span className="top-attendee-bar-name">
+                          {row.name.length > 10 ? row.name.slice(0, 5) + '…' : row.name}
+                        </span>
+                        <span className="top-attendee-bar-points">{row.totalAttendance.toLocaleString()} pts</span>
+                        <span className="top-attendee-bar-events">{row.totalEventsAttended}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="section-placeholder">No attendance data yet.</p>
+                )}
+              </div>
+
+              <section className="treasury-section">
+                <h4 className="treasury-heading">Treasury</h4>
+                <div className="treasury-card">
+                  <span className="treasury-label">Total Fund</span>
+                  <span className="treasury-value">
+                    ${guildInfo?.totalFund?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) ?? '—'}
+                  </span>
+                </div>
+                <div className="treasury-card">
+                  <span className="treasury-label">Attendance Share (90%)</span>
+                  <span className="treasury-value">
+                    ${guildInfo?.totalFund ? (guildInfo.totalFund * 0.9).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
+                  </span>
+                </div>
+                <div className="treasury-card">
+                  <span className="treasury-label">Management Share (10%)</span>
+                  <span className="treasury-value">
+                    ${guildInfo?.totalFund ? (guildInfo.totalFund * 0.1).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
+                  </span>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section className="top-cp-section">
+            <h3 className="guild-capacity-heading">Rankers</h3>
+            <div className="top-cp-list">
+              {topCPMembers.map((member, _) => (
+                <div key={member.name} className="top-cp-row">
+                  <span className="top-cp-rank"><Trophy size={18} strokeWidth={2} /></span>
+                  <span className="top-cp-name">{member.name}</span>
+                  <span className="top-cp-value">{member.combatPower.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="dashboard-right">
+          <section className="class-section">
+            <h3 className="guild-capacity-heading">Member Classes</h3>
+            <p className="section-subtitle">Breakdown of all member classes.</p>
+            <div className="class-list">
+              {classCounts.map(({ cls, count }) => (
+                <div key={cls} className="class-row">
+                  <img src={getMemberClassIconPath(cls)} alt={cls} className="class-icon" />
+                  <span className="class-name">{cls}</span>
+                  <span className="class-count">{count}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {classCounts.length > 0 && (
+            <section className="pie-section">
+              <h3 className="guild-capacity-heading">Member Class Chart</h3>
+              <div className="class-pie-wrapper">
+                <ClassPieChart entries={classCounts} total={totalClassMembers} />
+                <div className="class-legend">
+                  {classCounts.map(({ cls, count }) => (
+                    <div key={cls} className="class-legend-item">
+                      <span className="class-legend-dot" style={{ background: CLASS_COLORS[cls] ?? '#aaa' }} />
+                      <span className="class-legend-name">{cls}</span>
+                      <span className="class-legend-count">{Math.round((count / totalClassMembers) * 100)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
     </div>
   );
 };

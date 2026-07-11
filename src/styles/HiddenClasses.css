@@ -1503,6 +1503,291 @@
   color: #8ae19a;
 }
 
+/* ===== Light mode overrides ===== */
+:root:not(.dark-mode) .hidden-class-switcher-card {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f0f2f5 100%);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+  box-shadow: 0 10px 24px var(--shadow-light);
+}
+
+:root:not(.dark-mode) .hidden-class-switcher-card.active {
+  border-color: var(--accent-blue);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-blue) 30%, transparent), 0 16px 30px var(--shadow-light);
+}
+
+:root:not(.dark-mode) .hidden-class-switcher-card:hover {
+  box-shadow: 0 14px 28px var(--shadow-medium);
+}
+
+:root:not(.dark-mode) .hidden-class-tree-panel,
+:root:not(.dark-mode) .hidden-class-detail-panel {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f5f7fa 100%);
+  border-color: var(--border-light);
+  box-shadow: 0 18px 36px var(--shadow-light);
+}
+
+:root:not(.dark-mode) .hidden-class-board-title {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-class-section-heading h4,
+:root:not(.dark-mode) .hidden-detail-panel-header h4 {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-class-section-heading p,
+:root:not(.dark-mode) .hidden-node-category {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-node-card-label {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-class-node-icon-chip {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f0f2f5 100%);
+  border-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-segment,
+:root:not(.dark-mode) .hidden-progression-label {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-item {
+  border-top-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-item-clickable:hover,
+:root:not(.dark-mode) .hidden-progression-item-clickable:focus-visible {
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--bg-secondary));
+  border-top-color: var(--accent-blue);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-blue) 24%, transparent);
+}
+
+:root:not(.dark-mode) .hidden-node-rank-inside {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+
+:root:not(.dark-mode) .hidden-detail-summary {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f5f7fa 100%);
+  border-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-detail-summary p {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-value {
+  color: #2ecc71;
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-overlay {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  box-shadow: 0 22px 52px var(--shadow-medium);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-header {
+  border-bottom-color: var(--border-light);
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f0f2f5 100%);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-heading-copy h5 {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-close {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-close:hover,
+:root:not(.dark-mode) .hidden-ability-popup-close:focus-visible {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-meta-grid {
+  border-bottom-color: var(--border-light);
+  background: var(--bg-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-meta-item span {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-meta-item strong,
+:root:not(.dark-mode) .hidden-ability-popup-card-value {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-label {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-copy {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-header h6 {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card + .hidden-ability-popup-card {
+  border-top-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-header p {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-status {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-status-passive {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-card-status-active {
+  color: #2ecc71;
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-section-icon-fallback {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-panel-subtle {
+  background: var(--bg-primary);
+  border-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-panel-subtle .hidden-ability-popup-panel-title {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-panel-meta {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-ability-popup-panel-line {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, #f5f7fa 100%);
+  border-color: var(--border-light);
+  box-shadow: 0 20px 46px var(--shadow-medium);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-header {
+  border-bottom-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-header h5 {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-close {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-close:hover,
+:root:not(.dark-mode) .hidden-progression-popup-close:focus-visible {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-main {
+  border-bottom-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-meta-grid span,
+:root:not(.dark-mode) .hidden-progression-popup-heading-block p {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-meta-grid strong {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-type {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-detail-label {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-list li {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-section-copy {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-panel-subtle {
+  background: var(--bg-primary);
+  border-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-panel-subtle .hidden-progression-popup-panel-title {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-panel-meta {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-panel-line {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-section + .hidden-progression-popup-section {
+  border-top-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-popup-badges {
+  border-bottom-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-progression-level {
+  color: #d4a017;
+}
+
+:root:not(.dark-mode) .hidden-progression-icon {
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-detail-tabs {
+  background: var(--bg-primary);
+  border-color: var(--border-light);
+}
+
+:root:not(.dark-mode) .hidden-detail-tab {
+  color: var(--text-secondary);
+}
+
+:root:not(.dark-mode) .hidden-detail-tab.active {
+  background: color-mix(in srgb, var(--accent-blue) 18%, var(--bg-secondary));
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-node-rank {
+  background: color-mix(in srgb, var(--accent-blue) 14%, var(--bg-secondary));
+  color: var(--text-primary);
+}
+
+:root:not(.dark-mode) .hidden-node-card strong,
+:root:not(.dark-mode) .hidden-stat-card strong {
+  color: var(--text-primary);
+}
+
 @media (max-width: 1024px) {
   .hidden-class-switcher,
   .hidden-class-content,
