@@ -211,20 +211,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
         <h2>Dashboard</h2>
         <p className="page-subtitle">Welcome to Guild Dashboard</p>
       </div>
-      {userName && (
-        <div className="dashboard-welcome">
-          <img src="/assets/images/Avatar.png" alt="Avatar" className="dashboard-avatar" />
-          <div className="dashboard-welcome-text-wrap">
-            <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
-            <span className="dashboard-date">{formatToday()}</span>
-          </div>
-        </div>
-      )}
       <div className="dashboard-content">
         <div className="dashboard-left">
-          <section className="guild-capacity-section">
-            <h3 className="guild-capacity-heading">Guilds</h3>
-            <div className="guild-capacity-grid">
+          <div className="guild-section-wrapper">
+            <div className="guild-section-decor">
+              <img src="/assets/images/DemonLord.png" alt="Demon Lord" />
+            </div>
+            {userName && (
+              <div className="dashboard-welcome">
+                <div className="dashboard-welcome-text-wrap">
+                  <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
+                  <span className="dashboard-date">{formatToday()}</span>
+                </div>
+              </div>
+            )}
+            <section className="guild-capacity-section">
+              <h3 className="guild-capacity-heading">Guilds</h3>
+              <div className="guild-capacity-grid">
               {guildEntries.map((guild) => {
                 const available = MAX_GUILD_CAPACITY - guild.count;
                 return (
@@ -250,7 +253,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                 );
               })}
             </div>
-          </section>
+            </section>
+          </div>
 
           <section className="attendance-section">
             <h3 className="guild-capacity-heading">Attendance</h3>

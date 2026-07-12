@@ -666,37 +666,23 @@
   font-size: 0.92rem;
 }
 
+.guild-section-wrapper {
+  position: relative;
+  margin-top: 20px;
+}
+
 .dashboard-welcome {
+  padding: 0.1rem 0 2.5rem 190px;
+  min-height: 80px;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 0.5rem 0;
-  transition: transform 0.25s ease;
-}
-
-.dashboard-welcome:hover {
-  transform: translateX(6px);
-}
-
-.dashboard-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  transition: transform 0.25s ease;
-}
-
-.dashboard-welcome:hover .dashboard-avatar {
-  transform: scale(1.1);
+  margin-bottom: 1.38rem;
 }
 
 .dashboard-welcome-text {
   font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-primary);
-  transition: color 0.25s ease;
 }
 
 .dashboard-user-name {
@@ -716,13 +702,6 @@
   font-weight: 400;
 }
 
-.dashboard-welcome:hover .dashboard-welcome-text {
-  color: var(--accent-blue);
-}
-
-.dashboard-welcome:hover .dashboard-user-name {
-  color: var(--text-primary);
-}
 
 .dashboard-page .dashboard-grid {
   gap: 1rem;
@@ -883,9 +862,23 @@
   transition: box-shadow 0.25s ease, transform 0.25s ease;
 }
 
-.guild-capacity-section:hover {
-  box-shadow: 0 8px 24px var(--shadow-medium);
-  transform: translateY(-2px);
+.guild-section-decor {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  width: 220px;
+  height: 150px;
+  overflow: hidden;
+  transform: translate(-10px, -20px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.guild-section-decor img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
 }
 
 .guild-capacity-heading {
@@ -982,6 +975,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  margin-top: 134px;
 }
 
 /* Attendance Section */
