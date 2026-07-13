@@ -321,13 +321,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                 <div className="treasury-card">
                   <span className="treasury-label">Attendance Share (90%)</span>
                   <span className="treasury-value">
-                    ${guildInfo?.totalFund ? (guildInfo.totalFund * 0.9).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
+                    ${guildInfo?.totalFund != null ? (guildInfo.totalFund * 0.9).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
                   </span>
                 </div>
                 <div className="treasury-card">
                   <span className="treasury-label">Management Share (10%)</span>
                   <span className="treasury-value">
-                    ${guildInfo?.totalFund ? (guildInfo.totalFund * 0.1).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
+                    ${guildInfo?.totalFund != null ? (guildInfo.totalFund * 0.1).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}
                   </span>
                 </div>
               </section>
