@@ -668,11 +668,11 @@
 
 .guild-section-wrapper {
   position: relative;
-  margin-top: 20px;
+  margin-top: 32px;
 }
 
 .dashboard-welcome {
-  padding: 0.1rem 0 2.5rem 190px;
+  padding: 0 0 1.5rem 210px;
   min-height: 80px;
   display: flex;
   align-items: center;
@@ -864,7 +864,7 @@
 
 .guild-section-decor {
   position: absolute;
-  top: 0;
+  top: -14px;
   left: 10px;
   width: 220px;
   height: 150px;
