@@ -3021,6 +3021,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsExporting(true);
 
     try {
+      const totalPoints = manageSummaryRowsComputed.reduce(
+        (sum, row) => sum + row.computedTotalAttendance,
+        0
+      );
+
       const summaryRows: SummaryExportRow[] = manageSummaryRowsComputed.map((row) => ({
         name: row.name,
         guildName: row.guildName,
@@ -3036,7 +3041,13 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         computedMultiplier: row.computedMultiplier,
       }));
 
-      buildAndDownloadAttendanceWorkbook(summaryRows);
+      buildAndDownloadAttendanceWorkbook(summaryRows, {
+        totalFund,
+        attendanceShare: attendancePercentage,
+        managementShare: managementPercentage,
+        totalSessions,
+        totalPoints,
+      });
     } catch (error) {
       console.error('Failed to export attendance report:', error);
     } finally {
