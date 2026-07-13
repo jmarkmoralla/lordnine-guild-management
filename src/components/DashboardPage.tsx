@@ -217,14 +217,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
             <div className="guild-section-decor">
               <img src="/assets/images/DemonLord.png" alt="Demon Lord" />
             </div>
-            {userName && (
-              <div className="dashboard-welcome">
+            <div className="dashboard-welcome">
+              {userName && (
                 <div className="dashboard-welcome-text-wrap">
                   <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
                   <span className="dashboard-date">{formatToday()}</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <section className="guild-capacity-section">
               <h3 className="guild-capacity-heading">Guilds</h3>
               <div className="guild-capacity-grid">
