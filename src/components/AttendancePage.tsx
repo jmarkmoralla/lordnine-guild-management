@@ -1336,6 +1336,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
   const { members, loading: membersLoading, error: membersError } = useFirestoreMembers();
   const { bosses, loading: bossesLoading, error: bossesError } = useFirestoreBossInfo();
+  const bossPointsMap = useMemo(() => {
+    const map = new Map<string, number>();
+    bosses.forEach((boss) => {
+      if (boss.points !== undefined && boss.name) {
+        map.set(boss.name.trim().toLowerCase(), boss.points);
+      }
+    });
+    return map;
+  }, [bosses]);
   const {
     guildInfo,
     loading: guildInfoLoading,
@@ -1367,7 +1376,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const bossNameOptions = useMemo(() => {
     const filteredBosses = attendanceType === 'Guild Boss'
       ? bosses.filter((boss) => boss.bossType === 'Guild Boss')
-      : bosses;
+      : attendanceType === 'Field Boss' || attendanceType === 'Kransia'
+        ? bosses.filter((boss) => boss.bossType === 'Field Boss')
+        : bosses;
 
     const uniqueBossesByName = new Map<string, (typeof filteredBosses)[number]>();
     filteredBosses.forEach((boss) => {
@@ -2720,7 +2731,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     const selectedAttendancePoints = getAttendancePointsForBossSelection(
       attendanceType,
-      selectedBossesToPersist
+      selectedBossesToPersist,
+      bossPointsMap
     );
 
     try {
@@ -2808,8 +2820,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const isSaveAttendanceDisabled =
     isClearingAll || loading || isSyncingAttendanceSummary || isSavingAttendanceData;
   const displayedAttendancePoints = isCreateAttendanceOpen
-    ? getAttendancePointsForBossSelection(attendanceType, selectedBossNames)
-    : getAttendancePoints(attendanceType, bossName);
+    ? getAttendancePointsForBossSelection(attendanceType, selectedBossNames, bossPointsMap)
+    : getAttendancePoints(attendanceType, bossName, bossPointsMap);
   const totalFund = guildInfo?.totalFund ?? 0;
   const attendancePercentage = totalFund * 0.9;
   const managementPercentage = totalFund * 0.1;
@@ -4230,7 +4242,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         <td className="details-cell-type">{attendance.attendanceType}</td>
                         <td className="details-cell-boss">{attendance.bossName}</td>
                         <td className="details-cell-pts">
-                          {getAttendancePoints(attendance.attendanceType, attendance.bossName)}
+                          {getAttendancePoints(attendance.attendanceType, attendance.bossName, bossPointsMap)}
                         </td>
                         <td className="details-cell-multiplier">{Number(attendance.multiplier ?? 1).toFixed(1)}</td>
                         <td className="details-cell-date">{formatAttendanceDateOnly(attendance.attendanceDate)}</td>

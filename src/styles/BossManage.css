@@ -339,7 +339,11 @@
 }
 
 .boss-modal .modal-header {
-  padding: 1.45rem 1.3rem;
+  padding: 1.1rem 1.3rem;
+}
+
+.points-modal .modal-header {
+  padding: 1.1rem 1.3rem;
 }
 
 .boss-modal .modal-header h3 {
@@ -549,4 +553,130 @@
   .destroyer-days-checkboxes {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.points-modal {
+  max-width: 520px;
+}
+
+.points-modal .modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, #252d3d 100%);
+  padding: 0.9rem 1.3rem;
+}
+
+.points-group {
+  margin-bottom: 1.25rem;
+}
+
+.points-group:last-child {
+  margin-bottom: 0;
+}
+
+.points-group-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.points-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0;
+  gap: 0.75rem;
+}
+
+.points-row + .points-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.points-boss-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.points-input {
+  width: 90px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-family: inherit;
+  text-align: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.points-input:hover {
+  border-color: rgba(74, 144, 226, 0.3);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.points-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+}
+
+.points-input::-webkit-inner-spin-button,
+.points-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.btn-points-config {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.btn-points-config:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+.points-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 0.18rem 0.45rem;
+  margin-bottom: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.points-search-box:focus-within {
+  border-color: var(--accent-blue);
+}
+
+.points-search-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.1rem;
+  font-family: inherit;
+}
+
+.points-search-input:focus {
+  outline: none;
 }
