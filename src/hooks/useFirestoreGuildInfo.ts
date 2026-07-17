@@ -9,6 +9,7 @@ export interface GuildInfo {
   guildLevel: number;
   info: string;
   logo: string;
+  server: string;
   totalFund: number;
   attendancePercentage: number;
   managementPercentage: number;
@@ -47,6 +48,7 @@ export const useFirestoreGuildInfo = (): UseFirestoreGuildInfoReturn => {
             guildLevel: data.guildLevel,
             info: data.info,
             logo: data.logo,
+            server: data.server,
             totalFund: Number(data.totalFund || 0),
             attendancePercentage: Number(data.attendancePercentage || 0),
             managementPercentage: Number(data.managementPercentage || 0),

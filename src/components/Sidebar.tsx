@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import '../styles/Sidebar.css';
 import type { AppRole } from '../types/admin';
+import { useFirestoreGuildInfo } from '../hooks/useFirestoreGuildInfo';
 
 interface SidebarProps {
   activePage: string;
@@ -32,6 +33,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn, isOpen, onClose }) => {
+  const { guildInfo } = useFirestoreGuildInfo();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
@@ -68,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
             <img src="/assets/images/lordnine_logo.png" alt="Lordnine Logo" className="guild-logo-image" />
           </div>
           <div className="guild-info-section">
-            <h1 className="guild-name">Santiago 2</h1>
+            <h1 className="guild-name">{guildInfo?.server || 'LORDNINE'}</h1>
             <p className="guild-subtitle">Guild Management</p>
           </div>
         </div>
