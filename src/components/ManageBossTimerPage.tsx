@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Clock3, Loader, Pencil, Plus, Search, Skull, Trash2, X } from 'lucide-react';
+import { Clock3, Loader, Pencil, Plus, Search, Settings, Skull, Trash2, X } from 'lucide-react';
 import '../styles/Rankings.css';
 import '../styles/BossManage.css';
 import { useFirestoreBossInfo } from '../hooks/useFirestoreBossInfo';
@@ -384,6 +384,9 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
   const [deadTimeInput, setDeadTimeInput] = useState('');
   const [isUnknownKillTime, setIsUnknownKillTime] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showPointsModal, setShowPointsModal] = useState(false);
+  const [bossPoints, setBossPoints] = useState<Record<string, number>>({});
+  const [pointsSearchQuery, setPointsSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [newBoss, setNewBoss] = useState<BossInfo>({ ...defaultBoss });
   const [addFormError, setAddFormError] = useState('');
@@ -548,6 +551,39 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
     }
   };
 
+  const handleSavePoints = async () => {
+    try {
+      setSaving(true);
+      const updates = Object.entries(bossPoints).map(([id, points]) =>
+        updateBoss(id, { points })
+      );
+      await Promise.all(updates);
+      setShowPointsModal(false);
+    } catch (err) {
+      console.error('Failed to save boss points:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const bossPointsByType = useMemo(() => {
+    const bossTypeOrder = ['Field Boss', 'Destroyer', 'Guild Boss'];
+    const q = pointsSearchQuery.trim().toLowerCase();
+    const grouped: Record<string, BossInfo[]> = {};
+    bosses.forEach((boss) => {
+      if (!boss.id) return;
+      if (q && !boss.name.toLowerCase().includes(q)) return;
+      const type = boss.bossType || 'Other';
+      if (!grouped[type]) grouped[type] = [];
+      grouped[type].push(boss);
+    });
+    return Object.fromEntries(
+      bossTypeOrder
+        .filter((type) => grouped[type])
+        .map((type) => [type, grouped[type].sort((a, b) => a.name.localeCompare(b.name))])
+    );
+  }, [bosses, pointsSearchQuery]);
+
   const handleMarkAsDead = async (boss: BossInfo) => {
     const now = getPhilippinesNow();
     setDeadTimeInput(now.slice(0, 16));
@@ -642,6 +678,22 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
           <option value="dead">Dead</option>
           <option value="unknown">Unknown</option>
         </select>
+        <button
+          className="refresh-btn-filter icon-only btn-points-config"
+          onClick={() => {
+            const pointsMap: Record<string, number> = {};
+            bosses.forEach((boss) => {
+              if (boss.id) {
+                pointsMap[boss.id] = boss.points ?? 1;
+              }
+            });
+            setBossPoints(pointsMap);
+            setShowPointsModal(true);
+          }}
+          title="Configure Boss Points"
+        >
+          <Settings size={16} strokeWidth={1.8} />
+        </button>
         <button className="refresh-btn-filter" onClick={() => setShowAddModal(true)}>
           <Plus size={16} strokeWidth={1.8} />
           Add Boss
@@ -1406,6 +1458,74 @@ const ManageBossTimerPage: React.FC<ManageBossTimerPageProps> = ({ userType }) =
                 disabled={saving || (!isUnknownKillTime && !deadTimeInput)}
               >
                 Mark as Dead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPointsModal && (
+        <div className="modal-overlay" onClick={() => !saving && setShowPointsModal(false)}>
+          <div className="modal-content points-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Configure Boss Points</h3>
+              <button className="modal-close" onClick={() => setShowPointsModal(false)} disabled={saving} aria-label="Close">
+                <X size={18} strokeWidth={1.8} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="points-search-box">
+                <span className="boss-search-icon" aria-hidden="true">
+                  <Search size={14} strokeWidth={1.9} />
+                </span>
+                <input
+                  type="text"
+                  className="points-search-input"
+                  placeholder="Search boss name..."
+                  value={pointsSearchQuery}
+                  onChange={(event) => setPointsSearchQuery(event.target.value)}
+                />
+                {pointsSearchQuery && (
+                  <button
+                    type="button"
+                    className="boss-search-clear"
+                    onClick={() => setPointsSearchQuery('')}
+                    aria-label="Clear boss search"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+              {Object.entries(bossPointsByType).map(([type, typeBosses]) => (
+                <div key={type} className="points-group">
+                  <h4 className="points-group-title">{type}</h4>
+                  {typeBosses.map((boss) => (
+                    <div key={boss.id} className="points-row">
+                      <span className="points-boss-name">{boss.name}</span>
+                      <input
+                        type="number"
+                        className="points-input"
+                        min={0}
+                        value={boss.id ? bossPoints[boss.id] ?? 1 : 1}
+                        onChange={(event) => {
+                          const id = boss.id;
+                          if (!id) return;
+                          const val = Math.max(0, Number(event.target.value) || 0);
+                          setBossPoints((prev) => ({ ...prev, [id]: val }));
+                        }}
+                        disabled={saving}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowPointsModal(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={handleSavePoints} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Points'}
               </button>
             </div>
           </div>

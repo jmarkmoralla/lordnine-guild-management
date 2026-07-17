@@ -33,6 +33,7 @@ export interface BossInfo {
   bossImage: string;
   killedTime: string;
   status: BossStatus;
+  points?: number;
 }
 
 const getPersistedStatus = (status?: string): BossStatus => {
