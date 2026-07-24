@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, Ban, Crown, Loader, Pencil, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useAdminManagement } from '../hooks/useAdminManagement';
+import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
 import type { ManagedAdmin, ManagedAdminRole } from '../types/admin';
 import '../styles/Rankings.css';
 import '../styles/AdminManagement.css';
@@ -15,6 +16,7 @@ interface NewAdminFormState {
   displayName: string;
   password: string;
   confirmPassword: string;
+  guild: string;
   role: ManagedAdminRole;
 }
 
@@ -22,6 +24,7 @@ interface EditAdminFormState {
   uid: string;
   email: string;
   displayName: string;
+  guild: string;
 }
 
 const defaultFormState: NewAdminFormState = {
@@ -29,6 +32,7 @@ const defaultFormState: NewAdminFormState = {
   displayName: '',
   password: '',
   confirmPassword: '',
+  guild: '',
   role: 'admin',
 };
 
@@ -43,6 +47,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
     setAdminDisabled,
     deleteAdmin,
   } = useAdminManagement(canManageAdmins);
+  const { guildNames } = useFirestoreAllianceInfo();
   const [formState, setFormState] = useState<NewAdminFormState>(defaultFormState);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ uid: string; label: string } | null>(null);
@@ -77,6 +82,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
       uid: admin.uid,
       email: admin.email || '',
       displayName: admin.displayName || '',
+      guild: admin.guild || '',
     });
   };
 
@@ -112,6 +118,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
         displayName: formState.displayName.trim(),
         password: formState.password,
         role: formState.role,
+        guild: formState.guild,
       });
       setFormState(defaultFormState);
       setShowCreateModal(false);
@@ -155,6 +162,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
         uid: editingAdmin.uid,
         email: editingAdmin.email.trim(),
         displayName: editingAdmin.displayName.trim(),
+        guild: editingAdmin.guild,
       });
       setEditingAdmin(null);
       setActionMessage('Admin profile updated.');
@@ -289,6 +297,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                   <tr>
                     <th className="admin-col-name">Name</th>
                     <th className="admin-col-email">Email</th>
+                    <th className="admin-col-guild">Guild</th>
                     <th className="admin-col-role">Role</th>
                     <th className="admin-col-status">Status</th>
                     <th className="admin-col-actions">Actions</th>
@@ -307,6 +316,9 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                         <td className="admin-col-email">
                           <span className="admin-email-text">{admin.email || 'Unknown email'}</span>
                         </td>
+                        <td className="admin-col-guild">
+                          <span className="member-level">{admin.guild || '—'}</span>
+                        </td>
                         <td className="admin-col-role">
                           <select
                             className="admin-role-select"
@@ -316,6 +328,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                           >
                             <option value="admin">Admin</option>
                             <option value="super_admin">Super Admin</option>
+                            <option value="guild_admin">Guild Admin</option>
                           </select>
                         </td>
                         <td className="admin-col-status">
@@ -365,7 +378,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                   })}
                   {admins.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="attendance-empty-row">No admins found.</td>
+                      <td colSpan={6} className="attendance-empty-row">No admins found.</td>
                     </tr>
                   )}
                 </tbody>
@@ -378,7 +391,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
         <div className="modal-overlay" onClick={closeCreateModal}>
           <form className="modal-content add-member-modal admin-create-modal" onClick={(event) => event.stopPropagation()} onSubmit={handleCreateAdmin}>
             <div className="modal-header">
-              <h3>Create Admin</h3>
+              <h3>New Admin</h3>
               <button className="modal-close" type="button" onClick={closeCreateModal} aria-label="Close">
                 <X size={18} strokeWidth={1.8} />
               </button>
@@ -433,6 +446,22 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
               </div>
 
               <div className="form-group">
+                <label htmlFor="admin-guild">Guild</label>
+                <select
+                  id="admin-guild"
+                  className="filter-select"
+                  value={formState.guild}
+                  onChange={(event) => setFormState((current) => ({ ...current, guild: event.target.value }))}
+                  disabled={submitting}
+                >
+                  <option value="">Select guild</option>
+                  {guildNames.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
                 <label htmlFor="admin-role">Role</label>
                 <select
                   id="admin-role"
@@ -442,6 +471,7 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                 >
                   <option value="admin">Admin</option>
                   <option value="super_admin">Super Admin</option>
+                  <option value="guild_admin">Guild Admin</option>
                 </select>
               </div>
 
@@ -489,6 +519,22 @@ const ManageAdminsPage: React.FC<ManageAdminsPageProps> = ({ canManageAdmins, cu
                   placeholder="admin@example.com"
                   disabled={submitting}
                 />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-admin-guild">Guild</label>
+                <select
+                  id="edit-admin-guild"
+                  className="filter-select"
+                  value={editingAdmin.guild}
+                  onChange={(event) => setEditingAdmin((current) => current ? { ...current, guild: event.target.value } : current)}
+                  disabled={submitting}
+                >
+                  <option value="">Select guild</option>
+                  {guildNames.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
               </div>
 
               {actionError && <p className="admin-modal-error">{actionError}</p>}

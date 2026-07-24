@@ -12,6 +12,7 @@ const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image';
 const MAX_IMAGE_DATA_URL_LENGTH = 10 * 1024 * 1024;
 const ADMIN_ROLE = 'admin';
 const SUPER_ADMIN_ROLE = 'super_admin';
+const GUILD_ADMIN_ROLE = 'guild_admin';
 const MARKETPLACE_PRICING_DOC_PATH = 'appSettings/marketplacePricing';
 const MARKETPLACE_RATE_ENDPOINT = 'https://api.frankfurter.dev/v2/rate/USD/PHP';
 const MARKETPLACE_RATE_SOURCE = 'frankfurter';
@@ -47,6 +48,7 @@ const getBearerToken = (request) => {
 const normalizeAdminRole = (role, { legacyFallbackToSuperAdmin = false } = {}) => {
   if (role === SUPER_ADMIN_ROLE) return SUPER_ADMIN_ROLE;
   if (role === ADMIN_ROLE) return ADMIN_ROLE;
+  if (role === GUILD_ADMIN_ROLE) return GUILD_ADMIN_ROLE;
   return legacyFallbackToSuperAdmin ? SUPER_ADMIN_ROLE : ADMIN_ROLE;
 };
 
@@ -60,6 +62,7 @@ const normalizeAdminRecord = (uid, data) => {
     uid,
     email: typeof data?.email === 'string' ? data.email : '',
     displayName: typeof data?.displayName === 'string' ? data.displayName : '',
+    guild: typeof data?.guild === 'string' ? data.guild : '',
     enabled,
     authDisabled: data?.authDisabled === true,
     role,
@@ -78,7 +81,7 @@ const getAdminRecord = async (uid) => {
 
 const hasAdminAccess = async (decodedToken) => {
   const adminRecord = await getAdminRecord(decodedToken.uid);
-  return Boolean(adminRecord?.enabled);
+  return Boolean(adminRecord?.enabled && (adminRecord.role === ADMIN_ROLE || adminRecord.role === SUPER_ADMIN_ROLE));
 };
 
 const hasSuperAdminAccess = async (decodedToken) => {
@@ -364,9 +367,10 @@ exports.createAdmin = buildFunction(['POST'], async (request, response) => {
   const decodedToken = await requireSuperAdminUser(request, response);
   if (!decodedToken) return;
 
-  const { email, password, displayName = '', role } = parseJsonBody(request);
+  const { email, password, displayName = '', guild = '', role } = parseJsonBody(request);
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   const normalizedDisplayName = typeof displayName === 'string' ? displayName.trim() : '';
+  const normalizedGuild = typeof guild === 'string' ? guild.trim() : '';
   const normalizedRole = normalizeAdminRole(role);
 
   if (!normalizedEmail) {
@@ -393,6 +397,7 @@ exports.createAdmin = buildFunction(['POST'], async (request, response) => {
     const adminRecord = {
       email: normalizedEmail,
       displayName: normalizedDisplayName,
+      guild: normalizedGuild,
       enabled: true,
       authDisabled: false,
       role: normalizedRole,
@@ -482,10 +487,11 @@ exports.updateAdminProfile = buildFunction(['POST'], async (request, response) =
   const decodedToken = await requireSuperAdminUser(request, response);
   if (!decodedToken) return;
 
-  const { uid, email, displayName = '' } = parseJsonBody(request);
+  const { uid, email, displayName = '', guild = '' } = parseJsonBody(request);
   const targetUid = typeof uid === 'string' ? uid.trim() : '';
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   const normalizedDisplayName = typeof displayName === 'string' ? displayName.trim() : '';
+  const normalizedGuild = typeof guild === 'string' ? guild.trim() : '';
 
   if (!targetUid) {
     sendError(response, 400, 'Admin user ID is required.');
@@ -508,6 +514,7 @@ exports.updateAdminProfile = buildFunction(['POST'], async (request, response) =
     ...existingRecord,
     email: normalizedEmail,
     displayName: normalizedDisplayName,
+    guild: normalizedGuild,
     updatedAt: new Date().toISOString(),
     updatedBy: decodedToken.uid,
   };

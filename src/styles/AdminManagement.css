@@ -107,6 +107,15 @@
   min-width: 200px;
 }
 
+.admin-col-guild {
+  min-width: 140px;
+  text-align: center;
+}
+
+.admin-table th.admin-col-guild {
+  text-align: center;
+}
+
 .admin-col-role,
 .admin-col-status,
 .admin-col-actions,
