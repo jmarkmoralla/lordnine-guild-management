@@ -106,6 +106,17 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
 
   const canManage = userRole === 'admin' || userRole === 'super_admin' || userRole === 'guild_admin'
 
+  const duplicateError = useMemo(() => {
+    if (!selectedFolder || !selectedLoot) return ''
+    const guild = (userGuild ?? '').trim()
+    return items.some((item) =>
+      item.name === selectedFolder &&
+      item.loot === selectedLoot &&
+      (item.guild?.trim() ?? '') === guild &&
+      (!editingItem || item.id !== editingItem.id)
+    ) ? 'This item is already listed in your guild.' : ''
+  }, [items, selectedFolder, selectedLoot, userGuild, editingItem])
+
   const filteredFolders = useMemo(() => {
     if (!folderSearchQuery.trim()) return ITEM_LOG_FOLDERS
     const query = folderSearchQuery.trim().toLowerCase()
@@ -190,6 +201,7 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!selectedFolder || !selectedLoot) return
+    if (duplicateError) return
     try {
       setSaving(true)
       const payload = {
@@ -225,9 +237,11 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
   }, [items])
 
   const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
     return items.filter((item) => {
       const matchesSearch = !searchQuery.trim() ||
-        item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        item.name.toLowerCase().includes(q) ||
+        (item.loot && item.loot.toLowerCase().includes(q))
       const matchesGuild = selectedGuildFilter === 'all' ||
         item.guild === selectedGuildFilter
       return matchesSearch && matchesGuild
@@ -527,6 +541,9 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
                 ) : (
                   <span className="guild-log-loot-empty">—</span>
                 )}
+                {duplicateError && (
+                  <p className="guild-log-duplicate-error">{duplicateError}</p>
+                )}
               </section>
 
               <section className="marketplace-editor-category-section" aria-label="Quantity and price">
@@ -575,7 +592,7 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
                 <button type="button" className="btn btn-secondary" onClick={handleCloseAddModal} disabled={saving}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={saving || !selectedLoot}>
+                <button type="submit" className="btn btn-primary" disabled={saving || !selectedLoot || !!duplicateError}>
                   {saving ? (editingItem ? 'Saving...' : 'Adding...') : (editingItem ? 'Save Changes' : 'Add Item')}
                 </button>
               </div>
