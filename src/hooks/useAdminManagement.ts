@@ -110,6 +110,7 @@ export const useAdminManagement = (enabled: boolean) => {
     password: string;
     displayName: string;
     role: ManagedAdminRole;
+    guild?: string;
   }) => {
     await invokeAdminFunction('createAdmin', { body: payload });
     await loadAdmins();
@@ -124,6 +125,7 @@ export const useAdminManagement = (enabled: boolean) => {
     uid: string;
     email: string;
     displayName: string;
+    guild?: string;
   }) => {
     await invokeAdminFunction('updateAdminProfile', { body: payload });
     await loadAdmins();

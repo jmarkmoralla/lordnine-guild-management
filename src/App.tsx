@@ -9,13 +9,12 @@ import MembersManagePage from './components/MembersManagePage'
 import MarketplacePage from './components/MarketplacePage'
 import ManageMarketplacePage from './components/ManageMarketplacePage'
 import ManageBossTimerPage from './components/ManageBossTimerPage'
-import BossNotifierSettingsPage from './components/BossNotifierSettingsPage'
 import RelicCalculatorPage from './components/RelicCalculatorPage'
 import HiddenClassesPage from './components/HiddenClassesPage'
 import LoginPage from './components/LoginPage'
 import ManageAdminsPage from './components/ManageAdminsPage'
+import GuildLogsPage from './components/GuildLogsPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
-import { useDailyBossDiscordNotifier } from './hooks/useDailyBossDiscordNotifier'
 import { AttendanceSummaryProvider } from './contexts/AttendanceSummaryContext'
 import { ParticipationProvider } from './contexts/ParticipationContext'
 import './App.css'
@@ -26,12 +25,12 @@ const VALID_PAGE_KEYS = new Set([
   'manage-attendance',
   'rankings',
   'hidden-classes',
+  'guild-logs',
   'marketplace',
   'manage-members',
   'manage-marketplace',
   'manage-admins',
   'manage-boss-timer',
-  'manage-boss-notifier',
   'relic-calculator',
   'boss-timer',
 ])
@@ -42,12 +41,12 @@ const PAGE_TITLES: Record<string, string> = {
   'manage-attendance': 'Manage Attendance',
   rankings: 'Members',
   'hidden-classes': 'Hidden Classes',
+  'guild-logs': 'Item Log',
   marketplace: 'Marketplace',
   'manage-members': 'Manage Members',
   'manage-marketplace': 'Manage Marketplace',
   'manage-admins': 'Manage Admins',
   'manage-boss-timer': 'Manage Boss Timer',
-  'manage-boss-notifier': 'Field Boss Notifier',
   'relic-calculator': 'Relic Calculator',
   'boss-timer': 'Boss Timer',
 }
@@ -64,7 +63,7 @@ const getPageFromUrl = () => {
 }
 
 function App() {
-  const { isAdmin, role, canManageAdmins, user, logout } = useFirebaseAuth()
+  const { isAdmin, isGuildAdmin, role, canManageAdmins, user, guild, logout } = useFirebaseAuth()
   const [activePage, setActivePage] = useState(getPageFromUrl)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -74,9 +73,7 @@ function App() {
   })
 
   // Determine user type from Firebase auth state (treat not-logged-in as guest view)
-  const userType: 'guest' | 'admin' = isAdmin ? 'admin' : 'guest'
-
-  useDailyBossDiscordNotifier({ enabled: isAdmin })
+  const userType: 'guest' | 'admin' = (isAdmin || isGuildAdmin) ? 'admin' : 'guest'
 
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(isDarkMode))
@@ -161,6 +158,8 @@ function App() {
         return <RankingsPage />
       case 'hidden-classes':
         return <HiddenClassesPage />
+      case 'guild-logs':
+        return <GuildLogsPage userRole={role} userName={user?.displayName ?? undefined} userGuild={guild || undefined} />
       case 'marketplace':
         return <MarketplacePage />
       case 'manage-members':
@@ -171,8 +170,6 @@ function App() {
         return <ManageAdminsPage canManageAdmins={canManageAdmins} currentUserUid={user?.uid ?? null} />
       case 'manage-boss-timer':
         return <ManageBossTimerPage userType={userType!} />
-      case 'manage-boss-notifier':
-        return <BossNotifierSettingsPage userType={userType!} />
       case 'relic-calculator':
         return <RelicCalculatorPage userType={userType!} />
       case 'boss-timer':
@@ -211,6 +208,7 @@ function App() {
         onNavigate={handleNavigate}
         userType={userType}
         userRole={role}
+        userName={user?.displayName ?? undefined}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         onLogout={handleLogout}

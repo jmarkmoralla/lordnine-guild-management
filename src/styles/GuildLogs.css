@@ -1,0 +1,410 @@
+.guild-logs-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.guild-logs-toolbar .attendance-guest-search-box {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  min-width: 220px;
+}
+
+.guild-logs-add-btn {
+  padding: 0.45rem;
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-blue), #2a5298);
+  color: white;
+  border: 1px solid var(--accent-blue);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px var(--shadow-light);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.guild-logs-add-btn:hover {
+  background: linear-gradient(135deg, #2a5298, var(--accent-dark));
+  border-color: var(--accent-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px var(--shadow-medium);
+}
+
+.guild-logs-add-btn:active {
+  transform: scale(0.98) translateY(0);
+}
+
+.guild-logs-toolbar .filter-select {
+  min-width: 160px;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+}
+
+.guild-logs-toolbar .filter-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.guild-logs-list .marketplace-list-header,
+.guild-logs-list .marketplace-row {
+  grid-template-columns: minmax(200px, 1.6fr) 55px 120px 100px 150px 120px;
+}
+
+.guild-logs-list .marketplace-list-header.has-actions,
+.guild-logs-list .marketplace-row.has-actions {
+  grid-template-columns: minmax(200px, 1.6fr) 55px 120px 100px 150px 120px 132px;
+}
+
+.guild-logs-list .marketplace-list-body .marketplace-col-sale-price {
+  align-items: flex-end;
+  text-align: left;
+}
+
+.guild-logs-list .marketplace-list-header .guild-logs-col-qty,
+.guild-logs-list .marketplace-list-body .guild-logs-col-qty {
+  text-align: center;
+  align-items: center;
+}
+
+.guild-logs-list .marketplace-list-header .guild-logs-col-guild,
+.guild-logs-list .marketplace-list-body .guild-logs-col-guild {
+  text-align: center;
+  align-items: center;
+}
+
+.guild-logs-list .marketplace-list-body .guild-logs-col-leader {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.guild-logs-list .marketplace-list-body .guild-logs-col-status {
+  align-items: center;
+  text-align: center;
+}
+
+.guild-logs-list .marketplace-list-header .marketplace-col-actions,
+.guild-logs-list .marketplace-list-body .marketplace-col-actions {
+  text-align: center;
+  align-items: center;
+}
+
+.guild-logs-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.guild-logs-col-guild {
+  min-width: 100px;
+}
+
+.guild-logs-col-qty {
+  min-width: 50px;
+}
+
+.guild-log-qty-price-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.guild-log-qty-field {
+  flex: 0 0 100px;
+}
+
+.guild-log-qty-field input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.guild-log-qty-field input:focus {
+  border-color: var(--accent-blue);
+}
+
+.guild-log-price-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.guild-logs-col-leader {
+  min-width: 150px;
+}
+
+.guild-logs-col-status-header {
+  text-align: center;
+}
+
+.guild-logs-list .marketplace-item-name,
+.guild-log-modal .marketplace-item-name {
+  color: #8f56db;
+}
+
+.guild-logs-list .marketplace-row {
+  padding: 0.55rem 1rem;
+}
+
+.guild-logs-list .marketplace-list-body {
+  gap: 0.5rem;
+}
+
+.guild-logs-list .marketplace-item-thumb-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.guild-logs-list .marketplace-list-body .marketplace-item-main {
+  align-items: center;
+}
+
+.guild-log-modal .marketplace-editor-preview-card {
+  align-items: center;
+}
+
+.guild-log-dropdown {
+  position: relative;
+}
+
+.guild-log-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.guild-log-dropdown-trigger:hover {
+  border-color: var(--accent-blue);
+}
+
+.guild-log-dropdown-trigger:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.12);
+}
+
+.guild-log-dropdown-trigger-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.guild-log-dropdown-trigger-text.placeholder {
+  color: var(--text-secondary);
+}
+
+.guild-log-dropdown-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  color: var(--text-secondary);
+  margin-left: 0.5rem;
+}
+
+.guild-log-dropdown-chevron.open {
+  transform: rotate(180deg);
+}
+
+.guild-log-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px var(--shadow-medium);
+  overflow: hidden;
+}
+
+.guild-log-dropdown-search {
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 0;
+  padding: 0.5rem;
+  width: auto;
+}
+
+.guild-log-dropdown-list {
+  max-height: 130px;
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.guild-log-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.guild-log-dropdown-item:hover {
+  background: rgba(74, 144, 226, 0.08);
+}
+
+.guild-log-dropdown-item.active {
+  background: rgba(74, 144, 226, 0.14);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.guild-log-loot-empty {
+  display: block;
+  padding: 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.guild-log-modal .marketplace-editor-body > section + section {
+  margin-top: 0.5rem;
+}
+
+.guild-log-dropdown-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.price-currency {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.guild-logs-empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border-light);
+  border-radius: 12px;
+  margin: 1.5rem 0;
+}
+
+.guild-logs-empty-state h3 {
+  margin: 0 0 0.5rem;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.guild-logs-empty-state p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.price-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.price-empty {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.guild-logs-price-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.guild-logs-price-row .form-group {
+  flex: 1;
+}
+
+.guild-logs-price-row .form-group:last-child {
+  flex: 0 0 auto;
+  min-width: 130px;
+}
+
+.guild-log-price-group {
+  display: flex;
+}
+
+.guild-log-price-group input {
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  min-width: 0;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.guild-log-price-group input:focus {
+  border-color: var(--accent-blue);
+}
+
+.guild-log-price-group select {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.guild-log-price-group select:focus {
+  border-color: var(--accent-blue);
+}
+
+@media (max-width: 768px) {
+  .guild-logs-toolbar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .guild-logs-toolbar .attendance-guest-search-box {
+    width: 100%;
+  }
+
+  .guild-logs-table {
+    min-width: 500px;
+  }
+}

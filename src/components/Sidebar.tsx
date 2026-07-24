@@ -1,6 +1,6 @@
 import {
+  Axe,
   CalendarDays,
-  Bell,
   Calculator,
   Clock,
   Crown,
@@ -24,6 +24,7 @@ interface SidebarProps {
   onNavigate: (page: string) => void;
   userType: 'guest' | 'admin';
   userRole: AppRole;
+  userName?: string;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onLogout: () => void;
@@ -32,7 +33,7 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, userRole, userName, isDarkMode, onToggleDarkMode, onLogout, onRequestSignIn, isOpen, onClose }) => {
   const { guildInfo } = useFirestoreGuildInfo();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.75} /> },
@@ -40,9 +41,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
     { id: 'rankings', label: 'Members', icon: <Users size={18} strokeWidth={1.75} /> },
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={18} strokeWidth={1.75} /> },
     { id: 'hidden-classes', label: 'Hidden Classes', icon: <Swords size={18} strokeWidth={1.75} /> },
+    { id: 'guild-logs', label: 'Guild Logs', icon: <Axe size={18} strokeWidth={1.75} /> },
   ];
 
-  const managementMenuItems = userType === 'admin'
+  const managementMenuItems = (userRole === 'admin' || userRole === 'super_admin')
     ? [
         { id: 'manage-boss-timer', label: 'Manage Boss Timer', icon: <Clock size={18} strokeWidth={1.75} /> },
         { id: 'manage-attendance', label: 'Manage Attendance', icon: <CalendarDays size={18} strokeWidth={1.75} /> },
@@ -53,9 +55,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
 
   const toolsMenuItems = [
     { id: 'relic-calculator', label: 'Relic Calculator', icon: <Calculator size={18} strokeWidth={1.75} /> },
-    ...(userType === 'admin'
-      ? [{ id: 'manage-boss-notifier', label: 'Field Boss Notifier', icon: <Bell size={18} strokeWidth={1.75} /> }]
-      : []),
   ];
 
   const settingsMenuItems = userRole === 'super_admin'
@@ -155,12 +154,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
             <span className="user-icon" aria-hidden="true">
               {userRole === 'super_admin'
                 ? <Crown size={14} strokeWidth={1.8} />
-                : userType === 'admin'
-                  ? <Crown size={14} strokeWidth={1.8} />
-                  : <User size={14} strokeWidth={1.8} />}
+                : <User size={14} strokeWidth={1.8} />}
             </span>
             <span className="user-text">
-              {userRole === 'super_admin' ? 'Super Admin' : userType === 'admin' ? 'Admin' : 'Guest'}
+              {userType === 'guest' ? 'Guest' : userName || 'Admin'}
             </span>
           </div>
           
@@ -172,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
             {isDarkMode ? <Sun size={16} strokeWidth={1.8} /> : <Moon size={16} strokeWidth={1.8} />}
           </button>
           
-          {userType === 'admin' ? (
+          {userType === 'admin' || userRole === 'guild_admin' ? (
             <button
               className="control-btn logout-btn-sidebar"
               onClick={onLogout}

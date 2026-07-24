@@ -8,7 +8,7 @@ interface LoginPageProps {
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const { isAdmin, error: authError, loginAdmin } = useFirebaseAuth();
+  const { isAdmin, isGuildAdmin, error: authError, loginAdmin } = useFirebaseAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   }, []);
 
   // Auto-navigate when auth state changes
-  if (isAdmin && !isLoading) {
+  if ((isAdmin || isGuildAdmin) && !isLoading) {
     setTimeout(() => onLogin(), 100);
   }
 

@@ -17,8 +17,10 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
+  isGuildAdmin: boolean;
   role: AppRole;
   canManageAdmins: boolean;
+  guild: string;
 }
 
 interface AuthContextReturn extends AuthState {
@@ -32,8 +34,10 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     loading: true,
     error: null,
     isAdmin: false,
+    isGuildAdmin: false,
     role: 'guest',
     canManageAdmins: false,
+    guild: '',
   });
   // Listen to auth state changes
   useEffect(() => {
@@ -42,9 +46,11 @@ export const useFirebaseAuth = (): AuthContextReturn => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const adminAccess = user ? await getAdminAccess(user) : {
         isAdmin: false,
+        isGuildAdmin: false,
         isEnabled: false,
         role: 'guest' as AppRole,
         canManageAdmins: false,
+        guild: '',
       };
       if (!isMounted) return;
 
@@ -53,8 +59,10 @@ export const useFirebaseAuth = (): AuthContextReturn => {
         loading: false,
         error: null,
         isAdmin: adminAccess.isAdmin,
+        isGuildAdmin: adminAccess.isGuildAdmin,
         role: adminAccess.role,
         canManageAdmins: adminAccess.canManageAdmins,
+        guild: adminAccess.guild,
       });
     });
 
@@ -72,11 +80,12 @@ export const useFirebaseAuth = (): AuthContextReturn => {
       const currentUser = auth.currentUser;
       const adminAccess = currentUser ? await getAdminAccess(currentUser) : {
         isAdmin: false,
+        isGuildAdmin: false,
         isEnabled: false,
         role: 'guest' as AppRole,
         canManageAdmins: false,
       };
-      if (!adminAccess.isAdmin) {
+      if (!adminAccess.isAdmin && !adminAccess.isGuildAdmin) {
         await signOut(auth);
         const authRoleError = new Error(
           !adminAccess.isEnabled
@@ -150,39 +159,49 @@ function normalizeAuthError(err: unknown): { code: string; message: string } {
 
 async function getAdminAccess(user: User): Promise<{
   isAdmin: boolean;
+  isGuildAdmin: boolean;
   isEnabled: boolean;
   role: AppRole;
   canManageAdmins: boolean;
+  guild: string;
 }> {
   if (user.isAnonymous) {
-    return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
+    return { isAdmin: false, isGuildAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false, guild: '' };
   }
 
   try {
     const adminDocRef = doc(db, 'admins', user.uid);
     const adminDoc = await getDoc(adminDocRef);
     if (!adminDoc.exists()) {
-      return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
+      return { isAdmin: false, isGuildAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false, guild: '' };
     }
 
-    const isEnabled = adminDoc.data()?.enabled === true;
+    const data = adminDoc.data()
+    const isEnabled = data?.enabled === true;
+    const guild = typeof data?.guild === 'string' ? data.guild : '';
     const role = isEnabled
-      ? normalizeAdminRole(adminDoc.data()?.role, true)
-      : normalizeAdminRole(adminDoc.data()?.role, false);
+      ? normalizeAdminRole(data?.role, true)
+      : normalizeAdminRole(data?.role, false);
+
+    const isGuildAdmin = isEnabled && role === 'guild_admin';
+    const isAdmin = isEnabled && (role === 'admin' || role === 'super_admin');
 
     return {
-      isAdmin: isEnabled,
+      isAdmin,
+      isGuildAdmin,
       isEnabled,
       role: isEnabled ? role : 'guest',
       canManageAdmins: isEnabled && role === 'super_admin',
+      guild,
     };
   } catch {
-    return { isAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false };
+    return { isAdmin: false, isGuildAdmin: false, isEnabled: false, role: 'guest', canManageAdmins: false, guild: '' };
   }
 }
 
 function normalizeAdminRole(role: unknown, fallbackToSuperAdmin: boolean): Exclude<AppRole, 'guest'> {
   if (role === 'super_admin') return 'super_admin';
   if (role === 'admin') return 'admin';
+  if (role === 'guild_admin') return 'guild_admin';
   return fallbackToSuperAdmin ? 'super_admin' : 'admin';
 }

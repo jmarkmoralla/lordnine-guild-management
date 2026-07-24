@@ -1,4 +1,4 @@
-export type ManagedAdminRole = 'admin' | 'super_admin';
+export type ManagedAdminRole = 'admin' | 'super_admin' | 'guild_admin';
 
 export type AppRole = 'guest' | ManagedAdminRole;
 
@@ -7,6 +7,7 @@ export interface ManagedAdmin {
   email: string;
   displayName: string;
   role: ManagedAdminRole;
+  guild?: string;
   enabled: boolean;
   authDisabled: boolean;
   createdAt: string;
