@@ -44,6 +44,12 @@
   transform: scale(0.98) translateY(0);
 }
 
+.guild-log-duplicate-error {
+  color: var(--danger, #e74c3c);
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0;
+}
+
 .guild-logs-toolbar .filter-select {
   min-width: 160px;
   padding: 0.6rem 0.9rem;
