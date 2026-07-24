@@ -543,7 +543,7 @@ const GuildLogsPage: React.FC<GuildLogsPageProps> = ({ userRole, userName, userG
                     />
                   </div>
                   <div className="guild-log-price-field">
-                    <h4 className="marketplace-editor-label">Price per Piece</h4>
+                    <h4 className="marketplace-editor-label">Price per Piece (Optional)</h4>
                     <div className="guild-log-price-group">
                       <input
                         type="number"
