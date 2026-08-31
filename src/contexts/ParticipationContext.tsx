@@ -5,6 +5,7 @@ import { db } from '../config/firebase';
 interface ParticipationContextValue {
   totalSessions: number;
   fieldBossSessions: number;
+  kransiaSessions: number;
   loading: boolean;
   error: string | null;
 }
@@ -17,6 +18,7 @@ const normalizeValue = (value: string) => value.trim().toLowerCase();
 export const ParticipationProvider = ({ children }: { children: ReactNode }) => {
   const [totalSessions, setTotalSessions] = useState(0);
   const [fieldBossSessions, setFieldBossSessions] = useState(0);
+  const [kransiaSessions, setKransiaSessions] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +29,7 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
       (snapshot) => {
         let total = 0;
         let fieldBoss = 0;
+        let kransia = 0;
 
         snapshot.docs.forEach((sessionDoc) => {
           const data = sessionDoc.data() as { status?: string; isParticipationEligible?: boolean; attendanceType?: string };
@@ -38,11 +41,15 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
             if (data.attendanceType === 'Field Boss') {
               fieldBoss++;
             }
+            if (data.attendanceType === 'Kransia') {
+              kransia++;
+            }
           }
         });
 
         setTotalSessions(total);
         setFieldBossSessions(fieldBoss);
+        setKransiaSessions(kransia);
         setLoading(false);
         setError(null);
       },
@@ -56,7 +63,7 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
   }, []);
 
   return (
-    <ParticipationContext.Provider value={{ totalSessions, fieldBossSessions, loading, error }}>
+    <ParticipationContext.Provider value={{ totalSessions, fieldBossSessions, kransiaSessions, loading, error }}>
       {children}
     </ParticipationContext.Provider>
   );

@@ -5,6 +5,7 @@ export const MEMBER_CLASSES = [
   'Bow',
   'Crossbow',
   'Dual Daggers',
+  'Scythe',
   'Staff',
   'Sword and Shield',
   'Greatsword',

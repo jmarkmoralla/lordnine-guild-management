@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { MEMBER_CLASSES, getMemberClassIconPath, type MemberClass } from '../utils/memberClass';
 import { useAttendanceSummary } from '../contexts/AttendanceSummaryContext';
 import { useAttendanceParticipation } from '../contexts/ParticipationContext';
+import { useFirestoreAllianceInfo } from '../hooks/useFirestoreAllianceInfo';
 
 interface DashboardPageProps {
   userName?: string;
@@ -140,6 +141,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
   const { summaryRows } = useAttendanceSummary();
   const { totalSessions } = useAttendanceParticipation();
   const { guildInfo } = useFirestoreGuildInfo();
+  const { guildDescriptions } = useFirestoreAllianceInfo();
 
   const guildEntries = useMemo(() => {
     const guildMap = new Map<string, number>();
@@ -150,8 +152,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
     });
     return [...guildMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, count], index) => ({ label: `G${index + 1}`, count }));
-  }, [members]);
+      .map(([guildName, count], index) => ({
+        label: `G${index + 1}`,
+        desc: guildDescriptions[guildName] ?? '',
+        count,
+      }));
+  }, [members, guildDescriptions]);
 
   const guildAttendance = useMemo(() => {
     const map = new Map<string, number>();
@@ -241,7 +247,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                         <Users size={24} strokeWidth={1.75} />
                       </div>
                       <div className="guild-kpi-content">
-                        <h3>{guild.label}</h3>
+                        <h3>{guild.desc ? `${guild.label} - ${guild.desc}` : guild.label}</h3>
                         <p className="guild-kpi-count">{guild.count}/{MAX_GUILD_CAPACITY}</p>
                         <p className="guild-kpi-available">
                           {available === 0 ? 'Full' : `${available} slot${available !== 1 ? 's' : ''} available`}
@@ -337,7 +343,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
           <section className="top-cp-section">
             <h3 className="guild-capacity-heading">Rankers</h3>
             <div className="top-cp-list">
-              {topCPMembers.map((member, _) => (
+              {topCPMembers.map((member) => (
                 <div key={member.name} className="top-cp-row">
                   <span className="top-cp-rank"><Trophy size={18} strokeWidth={2} /></span>
                   <span className="top-cp-name">{member.name}</span>

@@ -195,6 +195,33 @@
   cursor: not-allowed;
 }
 
+.boss-multi-dropdown-select-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(74, 144, 226, 0.35);
+  background: rgba(74, 144, 226, 0.08);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.boss-multi-dropdown-select-all:hover {
+  background: rgba(74, 144, 226, 0.16);
+}
+
+.boss-multi-dropdown-select-all-input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+
 .boss-multi-dropdown-search {
   flex: 1;
   min-width: 110px;
@@ -1650,6 +1677,16 @@
 .member-date {
   color: var(--text-secondary);
   font-size: 0.85rem;
+}
+
+.kransia-participation-good {
+  color: #2ecc71;
+  font-weight: 600;
+}
+
+.kransia-participation-low {
+  color: #d85b5b;
+  font-weight: 600;
 }
 
 .member-status {

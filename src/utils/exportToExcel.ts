@@ -10,6 +10,7 @@ export interface SummaryExportRow {
   totalEventsAttended: number;
   computedTotalAttendance: number;
   participationPercent: number;
+  kransiaParticipationPercent: number;
   computedPercentage: number;
   computedUsdtShare: number;
   computedMultiplier: number;
@@ -40,14 +41,13 @@ export function buildAndDownloadAttendanceWorkbook(
     'No.',
     'Name',
     'Guild',
-    'Kransia',
+    'Kransia/Rift',
     'Field Boss',
     'Guild Boss',
     'Guild vs Guild',
     'Total Events Attended',
     'Total Points',
-    'Participation%',
-    '%',
+    'USDT %',
     'USDT Share',
     'Multiplier',
   ];
@@ -56,13 +56,12 @@ export function buildAndDownloadAttendanceWorkbook(
     index + 1,
     row.name,
     row.guildName,
-    row.kransia,
-    row.fieldBoss,
+    `${row.kransia} (${row.kransiaParticipationPercent.toFixed(0)}%)`,
+    `${row.fieldBoss} (${row.participationPercent.toFixed(0)}%)`,
     row.guildBoss,
     row.guildvsguild,
     row.totalEventsAttended,
     row.computedTotalAttendance,
-    Number(row.participationPercent.toFixed(2)),
     Number(row.computedPercentage.toFixed(2)),
     Number(row.computedUsdtShare.toFixed(2)),
     row.computedMultiplier,
@@ -106,19 +105,18 @@ export function buildAndDownloadAttendanceWorkbook(
     { wch: 5 },   // No.
     { wch: 28 },  // Summary labels / Name
     { wch: 16 },  // Summary values / Guild
-    { wch: 10 },  // Kransia
-    { wch: 12 },  // Field Boss
+    { wch: 14 },  // Kransia
+    { wch: 14 },  // Field Boss
     { wch: 12 },  // Guild Boss
     { wch: 16 },  // Guild vs Guild
     { wch: 22 },  // Total Events Attended
     { wch: 10 },  // Total Pts
-    { wch: 16 },  // Participation%
     { wch: 8 },   // %
     { wch: 14 },  // USDT Share
     { wch: 10 },  // Multiplier
+    { wch: 3 },   // M - spacer
     { wch: 3 },   // N - spacer
-    { wch: 3 },   // O - spacer
-    { wch: 60 },  // P - Computation Legend
+    { wch: 60 },  // O - Computation Legend
   ];
 
   const wb = XLSX.utils.book_new();
