@@ -33,7 +33,7 @@ interface UseFirestoreAttendanceSummaryReturn {
     totalEventsAttendedIncrement?: number,
     bossCountIncrement?: number
   ) => Promise<void>;
-  refreshSummaryForMember: (memberName: string) => Promise<void>;
+  refreshSummaryForMember: (memberName: string, bossPointsMap?: Map<string, number>) => Promise<void>;
 }
 
 export interface SummaryEditableFields {
@@ -266,7 +266,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
     await batch.commit();
   };
 
-  const refreshSummaryForMember = async (memberName: string) => {
+  const refreshSummaryForMember = async (memberName: string, bossPointsMap?: Map<string, number>) => {
     const normalizedName = memberName.trim().toLowerCase();
     if (!normalizedName) return;
 
@@ -307,7 +307,7 @@ export const useFirestoreAttendanceSummary = (): UseFirestoreAttendanceSummaryRe
       const effectiveMultiplier = Number.isFinite(normalizedMultiplier) && normalizedMultiplier >= 0
         ? normalizedMultiplier
         : 1;
-      nextValues[targetField] += getAttendancePoints(data.attendanceType || '', data.bossName || '') * effectiveMultiplier;
+      nextValues[targetField] += getAttendancePoints(data.attendanceType || '', data.bossName || '', bossPointsMap) * effectiveMultiplier;
       countValues[countField] += 1;
 
       const normalizedAttendanceType = normalizeAttendanceType(data.attendanceType || '');

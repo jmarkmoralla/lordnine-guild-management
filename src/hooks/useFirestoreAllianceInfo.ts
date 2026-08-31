@@ -129,8 +129,55 @@ const getGuildNamesFromDocument = (rawData: Record<string, unknown>) => {
   return [...guildNames];
 };
 
+const collectGuildDescriptions = (
+  value: unknown,
+  descriptions: Map<string, string>,
+  parentKeys: string[] = [],
+  currentKey = ''
+): void => {
+  if (typeof value === 'string') return;
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      collectGuildDescriptions(item, descriptions, [...parentKeys, currentKey].filter(Boolean), currentKey);
+    });
+    return;
+  }
+
+  if (!isRecord(value)) return;
+
+  if (isRecord(value.guildDesc)) {
+    Object.entries(value.guildDesc).forEach(([guildName, description]) => {
+      if (guildName.trim() && typeof description === 'string' && description.trim()) {
+        descriptions.set(guildName.trim(), description.trim());
+      }
+    });
+  }
+
+  const recordName = typeof value.guildName === 'string' && value.guildName.trim()
+    ? value.guildName.trim()
+    : shouldCollectNameForKey(currentKey, parentKeys) && typeof value.name === 'string' && value.name.trim()
+      ? value.name.trim()
+      : '';
+
+  if (recordName && typeof value.guildDesc === 'string' && value.guildDesc.trim()) {
+    descriptions.set(recordName, value.guildDesc.trim());
+  }
+
+  Object.entries(value).forEach(([key, nestedValue]) => {
+    collectGuildDescriptions(nestedValue, descriptions, [...parentKeys, key].filter(Boolean), key);
+  });
+};
+
+const getGuildDescriptionsFromDocument = (rawData: Record<string, unknown>) => {
+  const descriptions = new Map<string, string>();
+  collectGuildDescriptions(rawData, descriptions);
+  return descriptions;
+};
+
 interface UseFirestoreAllianceInfoReturn {
   guildNames: string[];
+  guildDescriptions: Record<string, string>;
   factionLeader: string;
   loading: boolean;
   error: string | null;
@@ -138,6 +185,7 @@ interface UseFirestoreAllianceInfoReturn {
 
 export const useFirestoreAllianceInfo = (): UseFirestoreAllianceInfoReturn => {
   const [guildNames, setGuildNames] = useState<string[]>([]);
+  const [guildDescriptions, setGuildDescriptions] = useState<Record<string, string>>({});
   const [factionLeader, setFactionLeader] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +195,7 @@ export const useFirestoreAllianceInfo = (): UseFirestoreAllianceInfoReturn => {
       collection(db, 'allianceInfo'),
       (snapshot) => {
         const nextGuildNames = new Set<string>();
+        const nextGuildDescriptions: Record<string, string> = {};
         let nextFactionLeader = '';
 
         snapshot.forEach((allianceDoc) => {
@@ -159,9 +208,14 @@ export const useFirestoreAllianceInfo = (): UseFirestoreAllianceInfoReturn => {
           getGuildNamesFromDocument(data).forEach((guildName) => {
             nextGuildNames.add(guildName);
           });
+
+          getGuildDescriptionsFromDocument(data).forEach((description, guildName) => {
+            nextGuildDescriptions[guildName] = description;
+          });
         });
 
         setGuildNames([...nextGuildNames].sort((first, second) => first.localeCompare(second)));
+        setGuildDescriptions(nextGuildDescriptions);
         setFactionLeader(nextFactionLeader);
         setLoading(false);
         setError(null);
@@ -178,6 +232,7 @@ export const useFirestoreAllianceInfo = (): UseFirestoreAllianceInfoReturn => {
 
   return {
     guildNames,
+    guildDescriptions,
     factionLeader,
     loading,
     error,

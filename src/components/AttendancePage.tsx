@@ -70,7 +70,6 @@ type SummaryColumnKey =
   | 'guildBoss'
   | 'guildvsguild'
   | 'totalPts'
-  | 'participation'
   | 'percentage'
   | 'usdtShare'
   | 'multiplier';
@@ -81,13 +80,12 @@ interface SummaryColumnDefinition {
 }
 
 const SUMMARY_COLUMNS: SummaryColumnDefinition[] = [
-  { key: 'kransia', label: 'Kransia' },
+  { key: 'kransia', label: 'Kransia/Rift' },
   { key: 'fieldBoss', label: 'Field Boss' },
   { key: 'guildBoss', label: 'Guild Boss' },
   { key: 'guildvsguild', label: 'Guild vs Guild' },
   { key: 'totalPts', label: 'Total Pts' },
-  { key: 'participation', label: 'Participation' },
-  { key: 'percentage', label: '%' },
+  { key: 'percentage', label: 'USDT %' },
   { key: 'usdtShare', label: 'USDT Share' },
   { key: 'multiplier', label: 'Multiplier' },
 ];
@@ -98,7 +96,6 @@ const DEFAULT_VISIBLE_SUMMARY_COLUMNS: Record<SummaryColumnKey, boolean> = {
   guildBoss: true,
   guildvsguild: true,
   totalPts: true,
-  participation: true,
   percentage: true,
   usdtShare: true,
   multiplier: true,
@@ -1360,6 +1357,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   } = useAttendanceSummary();
   const {
     totalSessions,
+    kransiaSessions,
     loading: participationLoading,
     error: participationError,
   } = useAttendanceParticipation();
@@ -1413,12 +1411,17 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }
 
     const normalizedBossSearch = bossSearchQuery.trim().toLowerCase();
-    if (!normalizedBossSearch) {
-      return bossNameOptions;
-    }
+    const filtered = normalizedBossSearch
+      ? bossNameOptions.filter((nameOption) => nameOption.toLowerCase().includes(normalizedBossSearch))
+      : bossNameOptions;
 
-    return bossNameOptions.filter((nameOption) => nameOption.toLowerCase().includes(normalizedBossSearch));
-  }, [bossNameOptions, bossSearchQuery, forceDashBossName]);
+    const selectedNames = new Set(selectedBossNames);
+    return [...filtered].sort((first, second) => {
+      const firstSelected = selectedNames.has(first) ? 1 : 0;
+      const secondSelected = selectedNames.has(second) ? 1 : 0;
+      return secondSelected - firstSelected;
+    });
+  }, [bossNameOptions, bossSearchQuery, forceDashBossName, selectedBossNames]);
 
   useEffect(() => {
     if (forceDashBossName) {
@@ -2558,18 +2561,6 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsClearingAll(false);
   };
 
-  const selectAllBosses = () => {
-    if (forceDashBossName) {
-      setSelectedBossNames(['-']);
-      return;
-    }
-
-    setSelectedBossNames([...bossNameOptions]);
-    if (createAttendanceError) {
-      setCreateAttendanceError(null);
-    }
-  };
-
   const clearSelectedBosses = () => {
     if (forceDashBossName) {
       setSelectedBossNames(['-']);
@@ -2577,6 +2568,27 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }
 
     setSelectedBossNames([]);
+  };
+
+  const areAllBossesSelected = !forceDashBossName && bossNameOptions.length > 0
+    && selectedBossNames.length === bossNameOptions.length;
+  const isPartialBossSelection = !forceDashBossName && selectedBossNames.length > 0 && !areAllBossesSelected;
+
+  const toggleSelectAllBosses = () => {
+    if (forceDashBossName) {
+      setSelectedBossNames(['-']);
+      return;
+    }
+
+    if (areAllBossesSelected) {
+      setSelectedBossNames([]);
+    } else {
+      setSelectedBossNames([...bossNameOptions]);
+    }
+
+    if (createAttendanceError) {
+      setCreateAttendanceError(null);
+    }
   };
 
   const toggleBossSelection = (bossOptionName: string) => {
@@ -2862,6 +2874,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const participationPercent = totalSessions > 0
         ? (totalEventsAttended / totalSessions) * 100
         : 0;
+      const kransiaParticipationPercent = kransiaSessions > 0
+        ? (Number(row.kransiaCount || 0) / kransiaSessions) * 100
+        : 0;
 
       return {
         ...row,
@@ -2874,6 +2889,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         participationEventCount: totalEventsAttended,
         participationTotalEvents: totalSessions,
         participationPercent,
+        kransiaParticipationPercent,
       };
     });
 
@@ -2900,7 +2916,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         if (attendanceDifference !== 0) return attendanceDifference;
         return first.name.localeCompare(second.name);
       });
-  }, [summaryRows, attendancePercentage, members, totalSessions]);
+  }, [summaryRows, attendancePercentage, members, totalSessions, kransiaSessions]);
 
   const guestSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -2962,17 +2978,24 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const renderSummaryMetricCells = (row: (typeof summaryRowsComputed)[number]) => visibleSummaryColumnDefinitions.map((column) => {
     switch (column.key) {
       case 'kransia':
-        return <td key={column.key} className="member-date">{row.kransia}</td>;
+        return (
+          <td key={column.key} className="member-date">
+            {row.kransia} (
+            <span className={row.kransiaParticipationPercent >= 80
+              ? 'kransia-participation-good'
+              : 'kransia-participation-low'}>
+              {row.kransiaParticipationPercent.toFixed(0)}%
+            </span>)
+          </td>
+        );
       case 'fieldBoss':
-        return <td key={column.key} className="member-date">{row.fieldBoss}</td>;
+        return <td key={column.key} className="member-date">{row.fieldBoss} ({row.participationPercent.toFixed(0)}%)</td>;
       case 'guildBoss':
         return <td key={column.key} className="member-date">{row.guildBoss}</td>;
       case 'guildvsguild':
         return <td key={column.key} className="member-date">{row.guildvsguild}</td>;
       case 'totalPts':
         return <td key={column.key} className="member-date">{row.computedTotalAttendance}</td>;
-      case 'participation':
-        return <td key={column.key} className="member-date">{row.participationPercent.toFixed(2)}%</td>;
       case 'percentage':
         return <td key={column.key} className="member-date">{row.computedPercentage.toFixed(2)}%</td>;
       case 'usdtShare':
@@ -3048,6 +3071,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         totalEventsAttended: row.totalEventsAttended,
         computedTotalAttendance: row.computedTotalAttendance,
         participationPercent: row.participationPercent,
+        kransiaParticipationPercent: row.kransiaParticipationPercent,
         computedPercentage: row.computedPercentage,
         computedUsdtShare: row.computedUsdtShare,
         computedMultiplier: row.computedMultiplier,
@@ -3273,7 +3297,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       await Promise.all(sessionTargets.map((attendance) => cleanupAttendanceSessionIfEmpty(attendance)));
 
       if (viewingMemberName) {
-        await refreshSummaryForMember(viewingMemberName);
+        await refreshSummaryForMember(viewingMemberName, bossPointsMap);
       }
     } catch (deleteError) {
       console.error('Failed to delete attendance detail:', deleteError);
@@ -3621,7 +3645,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               {manageSummaryRowsComputed.map((row, index) => (
                 <tr
                   key={row.id}
-                  className={row.participationPercent < 50 ? 'attendance-summary-row-low-participation' : undefined}
+                  className={row.kransiaParticipationPercent < 80 ? 'attendance-summary-row-low-participation' : undefined}
                 >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
@@ -3701,7 +3725,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               {guestSummaryRowsComputed.map((row, index) => (
                 <tr
                   key={row.id}
-                  className={row.participationPercent < 50 ? 'attendance-summary-row-low-participation' : undefined}
+                  className={row.kransiaParticipationPercent < 80 ? 'attendance-summary-row-low-participation' : undefined}
                 >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
@@ -3847,7 +3871,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               >
                 <option value="Field Boss">Field Boss</option>
                 <option value="Guild Boss">Guild Boss</option>
-                <option value="Kransia">Kransia</option>
+                <option value="Kransia">Kransia/Rift</option>
                 <option value="Guild vs. Guild">Guild vs. Guild</option>
               </select>
               <div className="boss-multi-dropdown" ref={bossDropdownRef}>
@@ -3876,14 +3900,20 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   <div className="boss-multi-dropdown-menu">
                     {!forceDashBossName && bossNameOptions.length > 0 && (
                       <div className="boss-multi-dropdown-actions">
-                        <button
-                          type="button"
-                          className="boss-multi-dropdown-action"
-                          onClick={selectAllBosses}
-                          disabled={selectedBossNames.length === bossNameOptions.length}
-                        >
-                          Select all
-                        </button>
+                        <label className="boss-multi-dropdown-select-all">
+                          <input
+                            type="checkbox"
+                            className="boss-multi-dropdown-select-all-input"
+                            checked={areAllBossesSelected}
+                            onChange={toggleSelectAllBosses}
+                            ref={(element) => {
+                              if (element) {
+                                element.indeterminate = isPartialBossSelection;
+                              }
+                            }}
+                            aria-label="Select all bosses"
+                          />
+                        </label>
                         <button
                           type="button"
                           className="boss-multi-dropdown-action muted"

@@ -14,7 +14,7 @@ interface AttendanceSummaryContextValue {
     totalEventsAttendedIncrement?: number,
     bossCountIncrement?: number
   ) => Promise<void>;
-  refreshSummaryForMember: (memberName: string) => Promise<void>;
+  refreshSummaryForMember: (memberName: string, bossPointsMap?: Map<string, number>) => Promise<void>;
 }
 
 const AttendanceSummaryContext = createContext<AttendanceSummaryContextValue | null>(null);
