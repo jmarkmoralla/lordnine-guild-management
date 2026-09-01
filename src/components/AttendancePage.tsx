@@ -1357,6 +1357,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   } = useAttendanceSummary();
   const {
     totalSessions,
+    fieldBossSessions,
     kransiaSessions,
     loading: participationLoading,
     error: participationError,
@@ -2871,11 +2872,11 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
       const guildName = memberGuildByName.get(normalizedRowName) ?? UNKNOWN_GUILD_LABEL;
       const walletAddress = memberWalletAddressByName.get(normalizedRowName) ?? '';
       const totalEventsAttended = row.totalEventsAttended ?? 0;
-      const participationPercent = totalSessions > 0
-        ? (totalEventsAttended / totalSessions) * 100
+      const fieldBossParticipationPercent = fieldBossSessions > 0
+        ? Math.min(100, (Number(row.fieldBossCount || 0) / fieldBossSessions) * 100)
         : 0;
       const kransiaParticipationPercent = kransiaSessions > 0
-        ? (Number(row.kransiaCount || 0) / kransiaSessions) * 100
+        ? Math.min(100, (Number(row.kransiaCount || 0) / kransiaSessions) * 100)
         : 0;
 
       return {
@@ -2888,7 +2889,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         totalEventsAttended,
         participationEventCount: totalEventsAttended,
         participationTotalEvents: totalSessions,
-        participationPercent,
+        fieldBossParticipationPercent,
         kransiaParticipationPercent,
       };
     });
@@ -2916,7 +2917,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         if (attendanceDifference !== 0) return attendanceDifference;
         return first.name.localeCompare(second.name);
       });
-  }, [summaryRows, attendancePercentage, members, totalSessions, kransiaSessions]);
+  }, [summaryRows, attendancePercentage, members, totalSessions, fieldBossSessions, kransiaSessions]);
 
   const guestSummaryRowsComputed = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -2989,7 +2990,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
           </td>
         );
       case 'fieldBoss':
-        return <td key={column.key} className="member-date">{row.fieldBoss} ({row.participationPercent.toFixed(0)}%)</td>;
+        return <td key={column.key} className="member-date">{row.fieldBoss} ({row.fieldBossParticipationPercent.toFixed(0)}%)</td>;
       case 'guildBoss':
         return <td key={column.key} className="member-date">{row.guildBoss}</td>;
       case 'guildvsguild':
@@ -3066,11 +3067,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         guildName: row.guildName,
         kransia: row.kransia,
         fieldBoss: row.fieldBoss,
+        fieldBossCount: row.fieldBossCount,
         guildBoss: row.guildBoss,
         guildvsguild: row.guildvsguild,
         totalEventsAttended: row.totalEventsAttended,
         computedTotalAttendance: row.computedTotalAttendance,
-        participationPercent: row.participationPercent,
+        fieldBossParticipationPercent: row.fieldBossParticipationPercent,
         kransiaParticipationPercent: row.kransiaParticipationPercent,
         computedPercentage: row.computedPercentage,
         computedUsdtShare: row.computedUsdtShare,
@@ -3082,6 +3084,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         attendanceShare: attendancePercentage,
         managementShare: managementPercentage,
         totalSessions,
+        fieldBossSessions,
         totalPoints,
       });
     } catch (error) {

@@ -5,11 +5,12 @@ export interface SummaryExportRow {
   guildName: string;
   kransia: number;
   fieldBoss: number;
+  fieldBossCount: number;
   guildBoss: number;
   guildvsguild: number;
   totalEventsAttended: number;
   computedTotalAttendance: number;
-  participationPercent: number;
+  fieldBossParticipationPercent: number;
   kransiaParticipationPercent: number;
   computedPercentage: number;
   computedUsdtShare: number;
@@ -21,6 +22,7 @@ export interface WorkbookMetadata {
   attendanceShare: number;
   managementShare: number;
   totalSessions: number;
+  fieldBossSessions: number;
   totalPoints: number;
 }
 
@@ -57,7 +59,7 @@ export function buildAndDownloadAttendanceWorkbook(
     row.name,
     row.guildName,
     `${row.kransia} (${row.kransiaParticipationPercent.toFixed(0)}%)`,
-    `${row.fieldBoss} (${row.participationPercent.toFixed(0)}%)`,
+    `${row.fieldBoss} (${row.fieldBossParticipationPercent.toFixed(0)}%)`,
     row.guildBoss,
     row.guildvsguild,
     row.totalEventsAttended,
@@ -80,8 +82,8 @@ export function buildAndDownloadAttendanceWorkbook(
     const usdt = Number(firstRow.computedUsdtShare.toFixed(2));
 
     legendRows.push(
-      ['Participation % = (Total Events Attended / Total Bosses) * 100'],
-      [`Sample: Participation % = (${firstRow.totalEventsAttended} / ${metadata.totalSessions}) * 100 = ${Number(firstRow.participationPercent.toFixed(2))}%`],
+      ['Field Boss Participation % = (Field Boss Count / Total Field Boss Sessions) * 100'],
+      [`Sample: Field Boss Participation % = (${firstRow.fieldBossCount} / ${metadata.fieldBossSessions}) * 100 = ${Number(firstRow.fieldBossParticipationPercent.toFixed(2))}%`],
       [],
       ['Attendance Percentage (%) = (Total Points / Overall Points) * 100'],
       [`Sample: Attendance Percentage (%) = (${firstRow.computedTotalAttendance} / ${metadata.totalPoints}) * 100 = ${attPct}%`],
@@ -91,7 +93,7 @@ export function buildAndDownloadAttendanceWorkbook(
     );
   } else {
     legendRows.push(
-      ['Participation % = (Total Events Attended / Total Bosses) * 100'],
+      ['Field Boss Participation % = (Field Boss Count / Total Field Boss Sessions) * 100'],
       [],
       ['Attendance Percentage (%) = (Total Points / Overall Points) * 100'],
       [],
