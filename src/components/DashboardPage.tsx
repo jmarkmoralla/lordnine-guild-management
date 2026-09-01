@@ -139,7 +139,7 @@ const ClassPieChart: React.FC<{ entries: Array<{ cls: string; count: number }>; 
 const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
   const { members } = useFirestoreMembers();
   const { summaryRows } = useAttendanceSummary();
-  const { totalSessions } = useAttendanceParticipation();
+  const { totalSessions, fieldBossSessions, kransiaSessions } = useAttendanceParticipation();
   const { guildInfo } = useFirestoreGuildInfo();
   const { guildDescriptions } = useFirestoreAllianceInfo();
 
@@ -160,26 +160,44 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
   }, [members, guildDescriptions]);
 
   const guildAttendance = useMemo(() => {
-    const map = new Map<string, number>();
+    const combinedSessions = fieldBossSessions + kransiaSessions;
 
+    const memberCountByName = new Map<string, number>();
     summaryRows.forEach((row) => {
-      const member = members.find((m) => m.name === row.name);
-      const guildName = member?.guildName?.trim();
-      if (!guildName) return;
-
-      const current = map.get(guildName) ?? 0;
-      map.set(guildName, current + row.fieldBossCount);
+      const normalizedName = row.name.trim().toLowerCase();
+      const current = memberCountByName.get(normalizedName) ?? 0;
+      memberCountByName.set(normalizedName, current + row.fieldBossCount + row.kransiaCount);
     });
 
-    const totalAllGuilds = [...map.values()].reduce((s, v) => s + v, 0);
+    const guildMembers = new Map<string, number[]>();
+    members.forEach((m) => {
+      const guildName = m.guildName.trim();
+      if (!guildName) return;
 
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, total], i) => ({
-        label: `G${i + 1}`,
-        pct: totalAllGuilds > 0 ? +(((total / totalAllGuilds) * 100).toFixed(1)) : 0,
-      }));
-  }, [summaryRows, members]);
+      const normalizedName = m.name.trim().toLowerCase();
+      const memberCount = memberCountByName.get(normalizedName) ?? 0;
+      const memberPct = combinedSessions > 0 ? Math.min(100, (memberCount / combinedSessions) * 100) : 0;
+
+      const current = guildMembers.get(guildName) ?? [];
+      current.push(memberPct);
+      guildMembers.set(guildName, current);
+    });
+
+    const allSortedGuildNames = [...guildMembers.keys()].sort((a, b) => a.localeCompare(b));
+
+    return allSortedGuildNames.map((guildName) => {
+      const memberPcts = guildMembers.get(guildName) ?? [];
+      const avgPct = memberPcts.length > 0
+        ? memberPcts.reduce((s, v) => s + v, 0) / memberPcts.length
+        : 0;
+      const label = `G${allSortedGuildNames.indexOf(guildName) + 1}`;
+      return {
+        label,
+        color: GUILD_COLORS[label] ?? '#4a90e2',
+        pct: +avgPct.toFixed(1),
+      };
+    });
+  }, [summaryRows, members, fieldBossSessions, kransiaSessions]);
 
   const topAttendees = useMemo(() => {
     return summaryRows
@@ -266,14 +284,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
             <h3 className="guild-capacity-heading">Attendance</h3>
 
             <div className="attendance-subsection">
-              <h4 className="attendance-subheading">Field Boss Participation</h4>
-              {guildAttendance.length > 0 ? (
+              <h4 className="attendance-subheading">Field Boss & Kransia Participation</h4>
+              {fieldBossSessions + kransiaSessions > 0 ? (
                 <div className="attendance-bar-chart">
                   {guildAttendance.map((g) => (
                     <div key={g.label} className="attendance-bar-row">
                       <span className="attendance-bar-label">{g.label}</span>
                       <div className="attendance-bar-track">
-                        <div className="attendance-bar-fill" style={{ width: `${g.pct}%` }} />
+                        <div
+                          className="attendance-bar-fill"
+                          style={{ width: `${g.pct}%`, '--guild-color': g.color } as React.CSSProperties}
+                        />
                       </div>
                       <span className="attendance-bar-value">{g.pct}%</span>
                     </div>

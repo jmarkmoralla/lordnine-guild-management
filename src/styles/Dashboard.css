@@ -1161,7 +1161,7 @@
 
 .attendance-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), color-mix(in srgb, var(--accent-blue) 70%, #fff));
+  background: linear-gradient(90deg, var(--guild-color, var(--accent-blue)), color-mix(in srgb, var(--guild-color, var(--accent-blue)) 70%, #fff));
   border-radius: 6px;
   transition: width 0.6s ease;
   min-width: 4px;
@@ -1314,7 +1314,7 @@
 
 /* Top 3 Combat Power Section */
 .top-cp-section {
-  flex: 1;
+  height: auto;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
@@ -1339,6 +1339,7 @@
 
 .top-cp-row {
   flex: 1;
+  height: 60px;
   display: flex;
   flex-direction: row;
   align-items: center;
