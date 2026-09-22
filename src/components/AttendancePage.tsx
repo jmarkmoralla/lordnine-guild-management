@@ -1318,7 +1318,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isBossDropdownOpen, setIsBossDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copiedWalletSummaryId, setCopiedWalletSummaryId] = useState<string | null>(null);
-  const [editingMetric, setEditingMetric] = useState<'totalFund' | null>(null);
+  const [editingMetric, setEditingMetric] = useState<'kransiaTotalFund' | 'fieldBossTotalFund' | null>(null);
   const [editingMetricValue, setEditingMetricValue] = useState('');
   const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [viewingMemberName, setViewingMemberName] = useState<string | null>(null);
@@ -2836,6 +2836,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     ? getAttendancePointsForBossSelection(attendanceType, selectedBossNames, bossPointsMap)
     : getAttendancePoints(attendanceType, bossName, bossPointsMap);
   const totalFund = guildInfo?.totalFund ?? 0;
+  const kransiaTotalFund = guildInfo?.kransiaTotalFund ?? 0;
+  const fieldBossTotalFund = guildInfo?.fieldBossTotalFund ?? 0;
   const attendancePercentage = totalFund * 0.9;
   const managementPercentage = totalFund * 0.1;
   const monthAbbreviations = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
@@ -3094,8 +3096,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     }
   };
 
-  const startMetricEdit = (currentValue: number) => {
-    setEditingMetric('totalFund');
+  const startMetricEdit = (metric: 'kransiaTotalFund' | 'fieldBossTotalFund', currentValue: number) => {
+    setEditingMetric(metric);
     setEditingMetricValue(String(currentValue));
   };
 
@@ -3113,10 +3115,15 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
     try {
       setIsSavingMetric(true);
+      const nextKransiaTotalFund = editingMetric === 'kransiaTotalFund' ? parsedValue : kransiaTotalFund;
+      const nextFieldBossTotalFund = editingMetric === 'fieldBossTotalFund' ? parsedValue : fieldBossTotalFund;
+      const nextTotalFund = nextKransiaTotalFund + nextFieldBossTotalFund;
       await updateGuildInfoFields(guildInfo.id, {
-        totalFund: parsedValue,
-        attendancePercentage: Number((parsedValue * 0.9).toFixed(1)),
-        managementPercentage: Number((parsedValue * 0.1).toFixed(1)),
+        kransiaTotalFund: nextKransiaTotalFund,
+        fieldBossTotalFund: nextFieldBossTotalFund,
+        totalFund: nextTotalFund,
+        attendancePercentage: Number((nextTotalFund * 0.9).toFixed(1)),
+        managementPercentage: Number((nextTotalFund * 0.1).toFixed(1)),
       });
       setEditingMetric(null);
       setEditingMetricValue('');
@@ -3452,6 +3459,20 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
 
             <div className="guild-metric-card" tabIndex={0}>
               <div className="guild-metric-header">
+                <p className="guild-metric-label">Kransia Fund</p>
+              </div>
+              <p className="guild-metric-value">${kransiaTotalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
+            </div>
+
+            <div className="guild-metric-card" tabIndex={0}>
+              <div className="guild-metric-header">
+                <p className="guild-metric-label">Field Boss Fund</p>
+              </div>
+              <p className="guild-metric-value">${fieldBossTotalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
+            </div>
+
+            <div className="guild-metric-card" tabIndex={0}>
+              <div className="guild-metric-header">
                 <p className="guild-metric-label">Attendance Share (90%)</p>
               </div>
               <p className="guild-metric-value">${attendancePercentage.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
@@ -3512,12 +3533,19 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
             <div className="guild-metric-card" tabIndex={0}>
               <div className="guild-metric-header">
                 <p className="guild-metric-label">Total Fund</p>
-                {editingMetric !== 'totalFund' ? (
+              </div>
+              <p className="guild-metric-value">${totalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
+            </div>
+
+            <div className="guild-metric-card" tabIndex={0}>
+              <div className="guild-metric-header">
+                <p className="guild-metric-label">Kransia Fund</p>
+                {editingMetric !== 'kransiaTotalFund' ? (
                   <button
                     type="button"
                     className="guild-metric-edit-btn"
-                    onClick={() => startMetricEdit(totalFund)}
-                    aria-label="Edit Total Fund"
+                    onClick={() => startMetricEdit('kransiaTotalFund', kransiaTotalFund)}
+                    aria-label="Edit Kransia Fund"
                     disabled={isSavingMetric}
                   >
                     ✎
@@ -3529,7 +3557,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   </div>
                 )}
               </div>
-              {editingMetric === 'totalFund' ? (
+              {editingMetric === 'kransiaTotalFund' ? (
                 <input
                   type="number"
                   min={0}
@@ -3539,7 +3567,41 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                   onChange={(event) => setEditingMetricValue(event.target.value)}
                 />
               ) : (
-                <p className="guild-metric-value">${totalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
+                <p className="guild-metric-value">${kransiaTotalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
+              )}
+            </div>
+
+            <div className="guild-metric-card" tabIndex={0}>
+              <div className="guild-metric-header">
+                <p className="guild-metric-label">Field Boss Fund</p>
+                {editingMetric !== 'fieldBossTotalFund' ? (
+                  <button
+                    type="button"
+                    className="guild-metric-edit-btn"
+                    onClick={() => startMetricEdit('fieldBossTotalFund', fieldBossTotalFund)}
+                    aria-label="Edit Field Boss Fund"
+                    disabled={isSavingMetric}
+                  >
+                    ✎
+                  </button>
+                ) : (
+                  <div className="guild-metric-actions">
+                    <button type="button" className="guild-metric-save-btn" onClick={saveMetricEdit} disabled={isSavingMetric}>✓</button>
+                    <button type="button" className="guild-metric-cancel-btn" onClick={cancelMetricEdit} disabled={isSavingMetric}>✕</button>
+                  </div>
+                )}
+              </div>
+              {editingMetric === 'fieldBossTotalFund' ? (
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className="guild-metric-input"
+                  value={editingMetricValue}
+                  onChange={(event) => setEditingMetricValue(event.target.value)}
+                />
+              ) : (
+                <p className="guild-metric-value">${fieldBossTotalFund.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>
               )}
             </div>
 

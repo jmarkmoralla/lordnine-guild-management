@@ -11,6 +11,8 @@ export interface GuildInfo {
   logo: string;
   server: string;
   totalFund: number;
+  kransiaTotalFund: number;
+  fieldBossTotalFund: number;
   attendancePercentage: number;
   managementPercentage: number;
 }
@@ -24,6 +26,8 @@ interface UseFirestoreGuildInfoReturn {
 
 export interface GuildInfoEditableFields {
   totalFund?: number;
+  kransiaTotalFund?: number;
+  fieldBossTotalFund?: number;
   attendancePercentage?: number;
   managementPercentage?: number;
 }
@@ -50,6 +54,8 @@ export const useFirestoreGuildInfo = (): UseFirestoreGuildInfoReturn => {
             logo: data.logo,
             server: data.server,
             totalFund: Number(data.totalFund || 0),
+            kransiaTotalFund: Number(data.kransiaTotalFund || 0),
+            fieldBossTotalFund: Number(data.fieldBossTotalFund || 0),
             attendancePercentage: Number(data.attendancePercentage || 0),
             managementPercentage: Number(data.managementPercentage || 0),
           });
