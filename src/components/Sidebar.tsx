@@ -9,6 +9,7 @@ import {
   LogOut,
   Moon,
   ShoppingBag,
+  Shield,
   Swords,
   Sun,
   User,
@@ -42,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userType, use
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={18} strokeWidth={1.75} /> },
     { id: 'hidden-classes', label: 'Hidden Classes', icon: <Swords size={18} strokeWidth={1.75} /> },
     { id: 'guild-logs', label: 'Guild Logs', icon: <Axe size={18} strokeWidth={1.75} /> },
+    { id: 'hard-raid', label: 'Hard Raid', icon: <Shield size={18} strokeWidth={1.75} /> },
   ];
 
   const managementMenuItems = (userRole === 'admin' || userRole === 'super_admin')

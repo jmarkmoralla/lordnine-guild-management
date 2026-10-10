@@ -14,6 +14,7 @@ import HiddenClassesPage from './components/HiddenClassesPage'
 import LoginPage from './components/LoginPage'
 import ManageAdminsPage from './components/ManageAdminsPage'
 import GuildLogsPage from './components/GuildLogsPage'
+import HardRaidPage from './components/HardRaidPage'
 import { useFirebaseAuth } from './hooks/useFirebaseAuth'
 import { AttendanceSummaryProvider } from './contexts/AttendanceSummaryContext'
 import { ParticipationProvider } from './contexts/ParticipationContext'
@@ -33,6 +34,7 @@ const VALID_PAGE_KEYS = new Set([
   'manage-boss-timer',
   'relic-calculator',
   'boss-timer',
+  'hard-raid',
 ])
 
 const PAGE_TITLES: Record<string, string> = {
@@ -49,6 +51,7 @@ const PAGE_TITLES: Record<string, string> = {
   'manage-boss-timer': 'Manage Boss Timer',
   'relic-calculator': 'Relic Calculator',
   'boss-timer': 'Boss Timer',
+  'hard-raid': 'Hard Raid',
 }
 
 const getPageFromUrl = () => {
@@ -174,6 +177,8 @@ function App() {
         return <RelicCalculatorPage userType={userType!} />
       case 'boss-timer':
         return <ManageBossTimerPage userType={userType!} />
+      case 'hard-raid':
+        return <HardRaidPage userType={userType!} />
       default:
         return <DashboardPage userName={user?.displayName ?? undefined} />
     }
