@@ -219,6 +219,7 @@ const getDefaultOcrProxyEndpoint = () => {
 };
 
 const OCR_PROXY_ENDPOINT = getDefaultOcrProxyEndpoint();
+const KRANSIA_PARTICIPATION_REQUIREMENT_PERCENT = 70;
 const isAttendanceEligibleByCombatPower = (combatPower: number) => Number(combatPower || 0) >= MINIMUM_ATTENDANCE_COMBAT_POWER;
 const getCreateAttendanceMultiplier = (combatPower: number) => {
   const normalizedCombatPower = Number(combatPower || 0);
@@ -2984,7 +2985,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
         return (
           <td key={column.key} className="member-date">
             {row.kransia} (
-            <span className={row.kransiaParticipationPercent >= 80
+            <span className={row.kransiaParticipationPercent >= KRANSIA_PARTICIPATION_REQUIREMENT_PERCENT
               ? 'kransia-participation-good'
               : 'kransia-participation-low'}>
               {row.kransiaParticipationPercent.toFixed(0)}%
@@ -3710,7 +3711,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               {manageSummaryRowsComputed.map((row, index) => (
                 <tr
                   key={row.id}
-                  className={row.kransiaParticipationPercent < 80 ? 'attendance-summary-row-low-participation' : undefined}
+                  className={row.kransiaParticipationPercent < KRANSIA_PARTICIPATION_REQUIREMENT_PERCENT ? 'attendance-summary-row-low-participation' : undefined}
                 >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">
@@ -3790,7 +3791,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
               {guestSummaryRowsComputed.map((row, index) => (
                 <tr
                   key={row.id}
-                  className={row.kransiaParticipationPercent < 80 ? 'attendance-summary-row-low-participation' : undefined}
+                  className={row.kransiaParticipationPercent < KRANSIA_PARTICIPATION_REQUIREMENT_PERCENT ? 'attendance-summary-row-low-participation' : undefined}
                 >
                   <td className="member-rank">{index + 1}</td>
                   <td className="member-name">

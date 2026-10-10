@@ -29,6 +29,7 @@ export interface MemberRanking {
   guildName: string;
   status: 'active' | 'inactive';
   memberType: 'guild master' | 'elite' | 'normal';
+  hardRaidGroup?: string | null;
 }
 
 interface UseFirestoreMembersReturn {
@@ -94,6 +95,10 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
               || rawData.memberType === 'normal'
                 ? rawData.memberType
                 : 'normal',
+            hardRaidGroup:
+              typeof rawData.hardRaidGroup === 'string' && rawData.hardRaidGroup
+                ? rawData.hardRaidGroup
+                : null,
           });
         });
 
@@ -154,6 +159,7 @@ export const useFirestoreMembers = (): UseFirestoreMembersReturn => {
         guildName: trimmedGuildName,
         status: member.status,
         memberType: member.memberType,
+        hardRaidGroup: member.hardRaidGroup ?? null,
       };
 
       await addDoc(collection(db, 'guildMembers'), memberPayload);
