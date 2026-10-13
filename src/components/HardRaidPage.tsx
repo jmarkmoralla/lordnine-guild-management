@@ -42,6 +42,7 @@ const HardRaidPage: React.FC<HardRaidPageProps> = ({ userType }) => {
   const [renameValue, setRenameValue] = useState('');
   const [addTargetGroupId, setAddTargetGroupId] = useState<string | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
 
   const groupIds = useMemo(() => new Set(groups.map((group) => group.id)), [groups]);
 
@@ -57,6 +58,22 @@ const HardRaidPage: React.FC<HardRaidPageProps> = ({ userType }) => {
 
     return map;
   }, [groups, members]);
+
+  const groupSearchTerm = groupSearch.trim().toLowerCase();
+  const groupSearchActive = groupSearchTerm.length > 0;
+
+  const matchingGroupIds = useMemo(() => {
+    const matches = new Set<string>();
+    if (!groupSearchTerm) return matches;
+
+    membersByGroup.forEach((groupMembers, groupId) => {
+      if (groupMembers.some((member) => member.name.toLowerCase().includes(groupSearchTerm))) {
+        matches.add(groupId);
+      }
+    });
+
+    return matches;
+  }, [membersByGroup, groupSearchTerm]);
 
   const unassignedMembers = useMemo(() => (
     members
@@ -235,11 +252,11 @@ const HardRaidPage: React.FC<HardRaidPageProps> = ({ userType }) => {
 
   const renderMemberChip = (
     member: MemberRanking,
-    options: { draggable: boolean; onRemove?: () => void },
+    options: { draggable: boolean; onRemove?: () => void; highlight?: boolean },
   ) => (
     <div
       key={member.id ?? member.name}
-      className={`hard-raid-chip ${options.draggable ? 'hard-raid-chip-draggable' : ''}`}
+      className={`hard-raid-chip ${options.draggable ? 'hard-raid-chip-draggable' : ''} ${options.highlight ? 'hard-raid-chip-match' : ''}`}
       draggable={options.draggable}
       onDragStart={(event) => handleDragStart(event, member.id ?? '')}
     >
@@ -359,99 +376,137 @@ const HardRaidPage: React.FC<HardRaidPageProps> = ({ userType }) => {
             </div>
           </aside>
 
-          <section className="hard-raid-groups">
-            {groups.length === 0 && (
-              <div className="hard-raid-empty-state">
-                <Shield size={28} strokeWidth={1.6} />
-                <p>No groups yet.</p>
-                {isAdmin && <p className="hard-raid-empty-sub">Create a group to start building your lineup.</p>}
+          <section className="hard-raid-groups-panel">
+            <div className="hard-raid-group-search-row">
+              <div className="hard-raid-search hard-raid-group-search">
+                <span className="hard-raid-search-icon" aria-hidden="true">
+                  <Search size={14} strokeWidth={1.9} />
+                </span>
+                <input
+                  type="text"
+                  className="hard-raid-search-input"
+                  placeholder="Search squads by player..."
+                  value={groupSearch}
+                  onChange={(event) => setGroupSearch(event.target.value)}
+                  aria-label="Search assigned members"
+                />
+                {groupSearch.trim().length > 0 && (
+                  <button
+                    type="button"
+                    className="hard-raid-search-clear"
+                    onClick={() => setGroupSearch('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
+                )}
               </div>
-            )}
+            </div>
 
-            {groups.map((group) => {
-              const groupMembers = membersByGroup.get(group.id) ?? [];
-              const isFull = groupMembers.length >= HARD_RAID_GROUP_SIZE;
-              const isRenaming = renamingGroupId === group.id;
+            <div className="hard-raid-groups">
+              {groups.length === 0 && (
+                <div className="hard-raid-empty-state">
+                  <Shield size={28} strokeWidth={1.6} />
+                  <p>No groups yet.</p>
+                  {isAdmin && <p className="hard-raid-empty-sub">Create a group to start building your lineup.</p>}
+                </div>
+              )}
 
-              return (
-                <article
-                  key={group.id}
-                  className={`hard-raid-group ${isFull ? 'hard-raid-group-full' : ''}`}
-                  onDragOver={handleDragOver}
-                  onDrop={(event) => handleDropOnGroup(event, group.id)}
-                >
-                  <header className="hard-raid-group-header">
-                    {isRenaming ? (
-                      <div className="hard-raid-group-rename">
-                        <input
-                          type="text"
-                          className="hard-raid-group-rename-input"
-                          value={renameValue}
-                          onChange={(event) => setRenameValue(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') void commitRenameGroup();
-                            if (event.key === 'Escape') cancelRenameGroup();
-                          }}
-                          autoFocus
-                          aria-label="Group name"
-                        />
-                        <button type="button" className="hard-raid-icon-btn" onClick={() => void commitRenameGroup()} aria-label="Save name">
-                          <Check size={15} strokeWidth={2.2} />
-                        </button>
-                        <button type="button" className="hard-raid-icon-btn" onClick={cancelRenameGroup} aria-label="Cancel rename">
-                          <X size={15} strokeWidth={2.2} />
-                        </button>
-                      </div>
-                    ) : (
-                      <h3 className="hard-raid-group-name">
-                        {group.name}
-                        <span className={`hard-raid-count ${isFull ? 'hard-raid-count-full' : ''}`}>
-                          {groupMembers.length}/{HARD_RAID_GROUP_SIZE}
-                        </span>
-                      </h3>
-                    )}
+              {groupSearchActive && groups.length > 0 && matchingGroupIds.size === 0 && (
+                <div className="hard-raid-empty-state">
+                  <Search size={26} strokeWidth={1.6} />
+                  <p>No members match your search.</p>
+                </div>
+              )}
 
-                    {isAdmin && !isRenaming && (
-                      <div className="hard-raid-group-actions">
-                        <button type="button" className="hard-raid-icon-btn" onClick={() => startRenameGroup(group)} aria-label={`Rename ${group.name}`} title="Rename group">
-                          <Pencil size={14} strokeWidth={1.9} />
-                        </button>
-                        <button type="button" className="hard-raid-icon-btn hard-raid-icon-btn-danger" onClick={() => void handleDeleteGroup(group)} aria-label={`Delete ${group.name}`} title="Delete group">
-                          <Trash2 size={14} strokeWidth={1.9} />
-                        </button>
-                      </div>
-                    )}
-                  </header>
+              {groups
+                .filter((group) => !groupSearchActive || matchingGroupIds.has(group.id))
+                .map((group) => {
+                  const groupMembers = membersByGroup.get(group.id) ?? [];
+                  const isFull = groupMembers.length >= HARD_RAID_GROUP_SIZE;
+                  const isRenaming = renamingGroupId === group.id;
 
-                  <div className="hard-raid-group-list">
-                    {groupMembers.map((member) => renderMemberChip(member, {
-                      draggable: isAdmin,
-                      onRemove: isAdmin && member.id ? () => void unassignMember(member.id as string) : undefined,
-                    }))}
-                    {groupMembers.length === 0 && (
-                      <p className="hard-raid-empty">
-                        {isAdmin ? 'Drop members here or use Add.' : 'No members assigned.'}
-                      </p>
-                    )}
-                  </div>
-
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      className="hard-raid-add-btn"
-                      onClick={() => {
-                        setPickerSearch('');
-                        setAddTargetGroupId(group.id);
-                      }}
-                      disabled={isFull || unassignedMembers.length === 0}
+                  return (
+                    <article
+                      key={group.id}
+                      className={`hard-raid-group ${isFull ? 'hard-raid-group-full' : ''}`}
+                      onDragOver={handleDragOver}
+                      onDrop={(event) => handleDropOnGroup(event, group.id)}
                     >
-                      <Plus size={14} strokeWidth={2.2} />
-                      {isFull ? 'Group full' : 'Add member'}
-                    </button>
-                  )}
-                </article>
-              );
-            })}
+                      <header className="hard-raid-group-header">
+                        {isRenaming ? (
+                          <div className="hard-raid-group-rename">
+                            <input
+                              type="text"
+                              className="hard-raid-group-rename-input"
+                              value={renameValue}
+                              onChange={(event) => setRenameValue(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') void commitRenameGroup();
+                                if (event.key === 'Escape') cancelRenameGroup();
+                              }}
+                              autoFocus
+                              aria-label="Group name"
+                            />
+                            <button type="button" className="hard-raid-icon-btn" onClick={() => void commitRenameGroup()} aria-label="Save name">
+                              <Check size={15} strokeWidth={2.2} />
+                            </button>
+                            <button type="button" className="hard-raid-icon-btn" onClick={cancelRenameGroup} aria-label="Cancel rename">
+                              <X size={15} strokeWidth={2.2} />
+                            </button>
+                          </div>
+                        ) : (
+                          <h3 className="hard-raid-group-name">
+                            {group.name}
+                            <span className={`hard-raid-count ${isFull ? 'hard-raid-count-full' : ''}`}>
+                              {groupMembers.length}/{HARD_RAID_GROUP_SIZE}
+                            </span>
+                          </h3>
+                        )}
+
+                        {isAdmin && !isRenaming && (
+                          <div className="hard-raid-group-actions">
+                            <button type="button" className="hard-raid-icon-btn" onClick={() => startRenameGroup(group)} aria-label={`Rename ${group.name}`} title="Rename group">
+                              <Pencil size={14} strokeWidth={1.9} />
+                            </button>
+                            <button type="button" className="hard-raid-icon-btn hard-raid-icon-btn-danger" onClick={() => void handleDeleteGroup(group)} aria-label={`Delete ${group.name}`} title="Delete group">
+                              <Trash2 size={14} strokeWidth={1.9} />
+                            </button>
+                          </div>
+                        )}
+                      </header>
+
+                      <div className="hard-raid-group-list">
+                        {groupMembers.map((member) => renderMemberChip(member, {
+                          draggable: isAdmin,
+                          onRemove: isAdmin && member.id ? () => void unassignMember(member.id as string) : undefined,
+                          highlight: groupSearchActive && member.name.toLowerCase().includes(groupSearchTerm),
+                        }))}
+                        {groupMembers.length === 0 && (
+                          <p className="hard-raid-empty">
+                            {isAdmin ? 'Drop members here or use Add.' : 'No members assigned.'}
+                          </p>
+                        )}
+                      </div>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="hard-raid-add-btn"
+                          onClick={() => {
+                            setPickerSearch('');
+                            setAddTargetGroupId(group.id);
+                          }}
+                          disabled={isFull || unassignedMembers.length === 0}
+                        >
+                          <Plus size={14} strokeWidth={2.2} />
+                          {isFull ? 'Group full' : 'Add member'}
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+            </div>
           </section>
         </div>
       )}
