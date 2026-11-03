@@ -28,6 +28,7 @@ const GUILD_COLORS: Record<string, string> = {
   G1: '#4a90e2',
   G2: '#f1c40f',
   G3: '#2ecc71',
+  G4: '#9b59b6',
 };
 
 const CLASS_COLORS: Record<string, string> = {
@@ -43,6 +44,11 @@ const CLASS_COLORS: Record<string, string> = {
 };
 
 const BAR_COLORS = ['#f1c40f', '#e74c3c', '#2ecc71', '#3498db', '#9b59b6'];
+
+const getTopAttendeeBarHeight = (value: number, minValue: number, maxValue: number) => {
+  const range = maxValue - minValue;
+  return range > 0 ? 10 + ((value - minValue) / range) * 90 : 100;
+};
 
 const GuildPieChart: React.FC<{ ratio: number; color: string }> = ({ ratio, color }) => {
   const size = 48;
@@ -139,7 +145,7 @@ const ClassPieChart: React.FC<{ entries: Array<{ cls: string; count: number }>; 
 const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
   const { members } = useFirestoreMembers();
   const { summaryRows } = useAttendanceSummary();
-  const { totalSessions, fieldBossSessions, kransiaSessions } = useAttendanceParticipation();
+  const { fieldBossSessions, kransiaSessions } = useAttendanceParticipation();
   const { guildInfo } = useFirestoreGuildInfo();
   const { guildDescriptions } = useFirestoreAllianceInfo();
 
@@ -205,12 +211,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
         const member = members.find((m) => m.name === row.name);
         return { ...row, guildName: member?.guildName ?? '—' };
       })
-      .filter((row) => totalSessions > 0 && (row.totalEventsAttended ?? 0) >= totalSessions && (row.totalAttendance ?? 0) > 0)
+      .filter((row) => (row.totalAttendance ?? 0) > 0)
       .sort((a, b) => (b.totalAttendance ?? 0) - (a.totalAttendance ?? 0))
       .slice(0, 10);
-  }, [summaryRows, members, totalSessions]);
+  }, [summaryRows, members]);
 
-  const maxAttended = useMemo(() => topAttendees[0]?.totalAttendance ?? 1, [topAttendees]);
+  const topAttendeeBarScale = useMemo(() => ({
+    min: topAttendees[topAttendees.length - 1]?.totalAttendance ?? 0,
+    max: topAttendees[0]?.totalAttendance ?? 0,
+  }), [topAttendees]);
 
   const classCounts = useMemo(() => {
     const map = new Map<MemberClass, number>();
@@ -236,22 +245,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
         <p className="page-subtitle">Welcome to Guild Dashboard</p>
       </div>
       <div className="dashboard-content">
-        <div className="dashboard-left">
-          <div className="guild-section-wrapper">
-            <div className="guild-section-decor">
-              <img src="/assets/images/DemonLord.png" alt="Demon Lord" />
-            </div>
-            <div className="dashboard-welcome">
-              {userName && (
-                <div className="dashboard-welcome-text-wrap">
-                  <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
-                  <span className="dashboard-date">{formatToday()}</span>
-                </div>
-              )}
-            </div>
-            <section className="guild-capacity-section">
-              <h3 className="guild-capacity-heading">Guilds</h3>
-              <div className="guild-capacity-grid">
+        <div className="guild-section-wrapper">
+          <div className="guild-section-decor">
+            <img src="/assets/images/DemonLord.png" alt="Demon Lord" />
+          </div>
+          <div className="dashboard-welcome">
+            {userName && (
+              <div className="dashboard-welcome-text-wrap">
+                <p className="dashboard-welcome-text">Welcome back, Lord <span className="dashboard-user-name">{userName}</span>!</p>
+                <span className="dashboard-date">{formatToday()}</span>
+              </div>
+            )}
+          </div>
+          <section className="guild-capacity-section">
+            <h3 className="guild-capacity-heading">Guilds</h3>
+            <div className="guild-capacity-grid">
               {guildEntries.map((guild) => {
                 const available = MAX_GUILD_CAPACITY - guild.count;
                 return (
@@ -277,9 +285,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                 );
               })}
             </div>
-            </section>
-          </div>
+          </section>
+        </div>
 
+        <div className="dashboard-left">
           <section className="attendance-section">
             <h3 className="guild-capacity-heading">Attendance</h3>
 
@@ -309,7 +318,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
               <div className="attendance-top-attendees">
                 <div className="top-attendee-header">
                   <h4 className="attendance-subheading">Top Attendees</h4>
-                  <span className="top-attendee-total-events">Total Bosses: {totalSessions}</span>
+                  <span className="top-attendee-total-events">Total Bosses: {fieldBossSessions + kransiaSessions}</span>
                 </div>
                 {topAttendees.length > 0 ? (
                   <div className="top-attendee-chart">
@@ -319,7 +328,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                           <div
                             className="top-attendee-bar"
                             style={{
-                              height: `${((row.totalAttendance ?? 0) / maxAttended) * 100}%`,
+                              height: `${getTopAttendeeBarHeight(row.totalAttendance ?? 0, topAttendeeBarScale.min, topAttendeeBarScale.max)}%`,
                               background: BAR_COLORS[i] ?? '#aaa',
                             }}
                           />
@@ -343,6 +352,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ userName }) => {
                   <span className="treasury-label">Total Fund</span>
                   <span className="treasury-value">
                     ${guildInfo?.totalFund?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) ?? '—'}
+                  </span>
+                </div>
+                <div className="treasury-card">
+                  <span className="treasury-label">Kransia Fund</span>
+                  <span className="treasury-value">
+                    ${guildInfo?.kransiaTotalFund?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) ?? '—'}
+                  </span>
+                </div>
+                <div className="treasury-card">
+                  <span className="treasury-label">Field Boss Fund</span>
+                  <span className="treasury-value">
+                    ${guildInfo?.fieldBossTotalFund?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) ?? '—'}
                   </span>
                 </div>
                 <div className="treasury-card">
