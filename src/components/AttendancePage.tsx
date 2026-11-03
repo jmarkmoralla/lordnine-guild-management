@@ -64,6 +64,8 @@ interface MemberAttendanceDetail {
   multiplier: number;
 }
 
+type MemberAttendanceTypeFilter = 'all' | 'Field Boss' | 'Kransia';
+
 type SummaryColumnKey =
   | 'kransia'
   | 'fieldBoss'
@@ -1324,6 +1326,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [viewingMemberName, setViewingMemberName] = useState<string | null>(null);
   const [memberAttendanceDetails, setMemberAttendanceDetails] = useState<MemberAttendanceDetail[]>([]);
+  const [memberDetailsTypeFilter, setMemberDetailsTypeFilter] = useState<MemberAttendanceTypeFilter>('all');
   const [selectedAttendanceDetailIds, setSelectedAttendanceDetailIds] = useState<string[]>([]);
   const [isLoadingMemberDetails, setIsLoadingMemberDetails] = useState(false);
   const [memberDetailsError, setMemberDetailsError] = useState<string | null>(null);
@@ -1528,6 +1531,14 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     const entries = records.map((record) => [record.memberId, record.status] as const);
     return new Map<string, AttendanceStatus>(entries);
   }, [records]);
+
+  const filteredMemberAttendanceDetails = useMemo(() => {
+    if (memberDetailsTypeFilter === 'all') return memberAttendanceDetails;
+
+    return memberAttendanceDetails.filter(
+      (detail) => detail.attendanceType.trim() === memberDetailsTypeFilter
+    );
+  }, [memberAttendanceDetails, memberDetailsTypeFilter]);
 
   const guildFilterOptions = useMemo(
     () => Array.from(new Set(members.map((member) => normalizeGuildFilterValue(member.guildName)))).sort((first, second) => first.localeCompare(second)),
@@ -3140,6 +3151,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     setIsLoadingMemberDetails(true);
     setMemberDetailsError(null);
     setMemberAttendanceDetails([]);
+    setMemberDetailsTypeFilter('all');
     setSelectedAttendanceDetailIds([]);
     setIsBulkDeletingAttendanceDetails(false);
 
@@ -3198,6 +3210,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   const closeMemberAttendanceDetails = () => {
     setViewingMemberName(null);
     setMemberAttendanceDetails([]);
+    setMemberDetailsTypeFilter('all');
     setSelectedAttendanceDetailIds([]);
     setMemberDetailsError(null);
     setIsLoadingMemberDetails(false);
@@ -3223,6 +3236,9 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
     const [datePart] = attendanceDate.split('T');
     return datePart || '-';
   };
+
+  const getAttendanceTypeLabel = (attendanceType: string) =>
+    attendanceType === 'Kransia' ? 'Kransia/Rift' : attendanceType;
 
   const cleanupAttendanceSessionIfEmpty = async (attendance: Pick<MemberAttendanceDetail, 'attendanceDate' | 'attendanceType' | 'bossName'>) => {
     const sessionId = buildAttendanceSessionIdFromAttendanceDate(
@@ -3327,15 +3343,21 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   };
 
   const toggleAllAttendanceDetailSelections = () => {
-    setSelectedAttendanceDetailIds((current) => (
-      current.length === memberAttendanceDetails.length
-        ? []
-        : memberAttendanceDetails.map((attendance) => attendance.id)
-    ));
+    setSelectedAttendanceDetailIds((current) => {
+      const visibleIds = filteredMemberAttendanceDetails.map((attendance) => attendance.id);
+      const allVisibleSelected = visibleIds.length > 0
+        && visibleIds.every((id) => current.includes(id));
+
+      if (allVisibleSelected) {
+        return current.filter((id) => !visibleIds.includes(id));
+      }
+
+      return [...new Set([...current, ...visibleIds])];
+    });
   };
 
   const bulkDeleteAttendanceDetails = async () => {
-    const attendancesToDelete = memberAttendanceDetails.filter((attendance) => (
+    const attendancesToDelete = filteredMemberAttendanceDetails.filter((attendance) => (
       selectedAttendanceDetailIds.includes(attendance.id)
     ));
 
@@ -3354,8 +3376,8 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
   };
 
   const isDeletingAttendanceDetails = isBulkDeletingAttendanceDetails;
-  const areAllAttendanceDetailsSelected = memberAttendanceDetails.length > 0
-    && selectedAttendanceDetailIds.length === memberAttendanceDetails.length;
+  const areAllAttendanceDetailsSelected = filteredMemberAttendanceDetails.length > 0
+    && filteredMemberAttendanceDetails.every((attendance) => selectedAttendanceDetailIds.includes(attendance.id));
 
   const memberAttendanceTable = (
     <div className="attendance-table-container">
@@ -4271,6 +4293,23 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                 <p className="attendance-details-subtitle">Attendance details</p>
               </div>
               <div className="attendance-details-header-actions">
+                <div className="attendance-details-filter">
+                  <select
+                    id="attendance-details-type-filter"
+                    className="filter-select"
+                    value={memberDetailsTypeFilter}
+                    onChange={(event) => {
+                      setMemberDetailsTypeFilter(event.target.value as MemberAttendanceTypeFilter);
+                      setSelectedAttendanceDetailIds([]);
+                    }}
+                    disabled={isLoadingMemberDetails}
+                    aria-label="Filter attendance details by type"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="Field Boss">Field Boss</option>
+                    <option value="Kransia">Kransia/Rift</option>
+                  </select>
+                </div>
                 {canManage && (
                   <button
                     type="button"
@@ -4324,7 +4363,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                             className="details-select-input"
                             checked={areAllAttendanceDetailsSelected}
                             onChange={toggleAllAttendanceDetailSelections}
-                            disabled={memberAttendanceDetails.length === 0 || isDeletingAttendanceDetails}
+                            disabled={filteredMemberAttendanceDetails.length === 0 || isDeletingAttendanceDetails}
                             aria-label="Select all attendance records"
                           />
                         </th>
@@ -4332,10 +4371,10 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                     </tr>
                   </thead>
                   <tbody>
-                    {memberAttendanceDetails.map((attendance, index) => (
+                    {filteredMemberAttendanceDetails.map((attendance, index) => (
                       <tr key={attendance.id}>
                         <td className="details-cell-number">{index + 1}</td>
-                        <td className="details-cell-type">{attendance.attendanceType}</td>
+                        <td className="details-cell-type">{getAttendanceTypeLabel(attendance.attendanceType)}</td>
                         <td className="details-cell-boss">{attendance.bossName}</td>
                         <td className="details-cell-pts">
                           {getAttendancePoints(attendance.attendanceType, attendance.bossName, bossPointsMap)}
@@ -4357,10 +4396,12 @@ const AttendancePage: React.FC<AttendancePageProps> = ({ userType, mode = 'view'
                         )}
                       </tr>
                     ))}
-                    {memberAttendanceDetails.length === 0 && (
+                    {filteredMemberAttendanceDetails.length === 0 && (
                       <tr>
                         <td colSpan={canManage ? 8 : 7} className="attendance-empty-row">
-                          No attendance records found for this member.
+                          {memberAttendanceDetails.length === 0
+                            ? 'No attendance records found for this member.'
+                            : 'No attendance records match the selected type.'}
                         </td>
                       </tr>
                     )}
